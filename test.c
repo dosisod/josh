@@ -28,7 +28,7 @@ int main(void) {
 		static struct josh_ctx_t ctx;
 
 		size_t len = 0;
-		const char * out = josh_extract(&ctx, json, "0", &len);
+		const char * out = josh_extract(&ctx, json, "[0]", &len);
 
 		ASSERT(len == 1);
 		ASSERT(out == json + 1);
@@ -39,7 +39,7 @@ int main(void) {
 		static struct josh_ctx_t ctx;
 
 		size_t len = 0;
-		const char * out = josh_extract(&ctx, json, "0", &len);
+		const char * out = josh_extract(&ctx, json, "[0]", &len);
 
 		ASSERT(len == 1);
 		ASSERT(out == json + 4);
@@ -50,13 +50,79 @@ int main(void) {
 		static struct josh_ctx_t ctx;
 
 		size_t len = 0;
-		const char * out = josh_extract(&ctx, json, "0", &len);
+		const char * out = josh_extract(&ctx, json, "[0]", &len);
 
 		ASSERT(!out);
 		ASSERT(!len);
-		ASSERT(ctx.error_id == JOSH_EXPECTED_ARRAY);
+		ASSERT(ctx.error_id == JOSH_ERROR_EXPECTED_ARRAY);
 		ASSERT(ctx.line == 1);
 		ASSERT(ctx.column == 1);
 		ASSERT(ctx.offset == 0);
+	}
+
+	TEST("error set if JSON string is empty") {
+		static struct josh_ctx_t ctx;
+
+		size_t len = 0;
+		const char * out = josh_extract(&ctx, "", "[0]", &len);
+
+		ASSERT(!out);
+		ASSERT(!len);
+		ASSERT(ctx.error_id == JOSH_ERROR_EMPTY_VALUE);
+		ASSERT(ctx.line == 1);
+		ASSERT(ctx.column == 1);
+		ASSERT(ctx.offset == 0);
+	}
+
+	TEST("multi digit numbers return correct length") {
+		const char *json = "[123]";
+		static struct josh_ctx_t ctx;
+
+		size_t len = 0;
+		const char * out = josh_extract(&ctx, json, "[0]", &len);
+
+		ASSERT(len == 3);
+		ASSERT(out == json + 1);
+	}
+
+	TEST("string is able to be parsed") {
+		const char *json = "[\"abc\"]";
+		static struct josh_ctx_t ctx;
+
+		size_t len = 0;
+		const char * out = josh_extract(&ctx, json, "[0]", &len);
+
+		ASSERT(len == 5);
+		ASSERT(out == json + 1);
+	}
+
+	TEST("error set if JSON string is never closed") {
+		static struct josh_ctx_t ctx;
+		const char *json = "[\"abc";
+
+		size_t len = 0;
+		const char * out = josh_extract(&ctx, json, "[0]", &len);
+
+		ASSERT(!out);
+		ASSERT(!len);
+		ASSERT(ctx.error_id == JOSH_ERROR_STRING_NOT_CLOSED);
+		ASSERT(ctx.line == 1);
+		ASSERT(ctx.column == 6);
+		ASSERT(ctx.offset == 5);
+	}
+
+	TEST("error set if JSON number is invalid") {
+		static struct josh_ctx_t ctx;
+		const char *json = "[1x]";
+
+		size_t len = 0;
+		const char * out = josh_extract(&ctx, json, "[0]", &len);
+
+		ASSERT(!out);
+		ASSERT(!len);
+		ASSERT(ctx.error_id == JOSH_ERROR_NUMBER_INVALID);
+		ASSERT(ctx.line == 1);
+		ASSERT(ctx.column == 3);
+		ASSERT(ctx.offset == 2);
 	}
 }
