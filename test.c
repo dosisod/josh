@@ -27,10 +27,9 @@ int main(void) {
 		const char *json = "[1]";
 		static struct josh_ctx_t ctx;
 
-		size_t len = 0;
-		const char * out = josh_extract(&ctx, json, "[0]", &len);
+		const char * out = josh_extract(&ctx, json, "[0]");
 
-		ASSERT(len == 1);
+		ASSERT(ctx.len == 1);
 		ASSERT(out == json + 1);
 	}
 
@@ -38,10 +37,9 @@ int main(void) {
 		const char *json = "   [1]";
 		static struct josh_ctx_t ctx;
 
-		size_t len = 0;
-		const char * out = josh_extract(&ctx, json, "[0]", &len);
+		const char * out = josh_extract(&ctx, json, "[0]");
 
-		ASSERT(len == 1);
+		ASSERT(ctx.len == 1);
 		ASSERT(out == json + 4);
 	}
 
@@ -49,11 +47,10 @@ int main(void) {
 		const char *json = "{}";
 		static struct josh_ctx_t ctx;
 
-		size_t len = 0;
-		const char * out = josh_extract(&ctx, json, "[0]", &len);
+		const char * out = josh_extract(&ctx, json, "[0]");
 
 		ASSERT(!out);
-		ASSERT(!len);
+		ASSERT(!ctx.len);
 		ASSERT(ctx.error_id == JOSH_ERROR_EXPECTED_ARRAY);
 		ASSERT(ctx.line == 1);
 		ASSERT(ctx.column == 1);
@@ -63,11 +60,10 @@ int main(void) {
 	TEST("error set if JSON string is empty") {
 		static struct josh_ctx_t ctx;
 
-		size_t len = 0;
-		const char * out = josh_extract(&ctx, "", "[0]", &len);
+		const char * out = josh_extract(&ctx, "", "[0]");
 
 		ASSERT(!out);
-		ASSERT(!len);
+		ASSERT(!ctx.len);
 		ASSERT(ctx.error_id == JOSH_ERROR_EMPTY_VALUE);
 		ASSERT(ctx.line == 1);
 		ASSERT(ctx.column == 1);
@@ -78,10 +74,9 @@ int main(void) {
 		const char *json = "[123]";
 		static struct josh_ctx_t ctx;
 
-		size_t len = 0;
-		const char * out = josh_extract(&ctx, json, "[0]", &len);
+		const char * out = josh_extract(&ctx, json, "[0]");
 
-		ASSERT(len == 3);
+		ASSERT(ctx.len == 3);
 		ASSERT(out == json + 1);
 	}
 
@@ -89,10 +84,9 @@ int main(void) {
 		const char *json = "[\"abc\"]";
 		static struct josh_ctx_t ctx;
 
-		size_t len = 0;
-		const char * out = josh_extract(&ctx, json, "[0]", &len);
+		const char * out = josh_extract(&ctx, json, "[0]");
 
-		ASSERT(len == 5);
+		ASSERT(ctx.len == 5);
 		ASSERT(out == json + 1);
 	}
 
@@ -100,11 +94,10 @@ int main(void) {
 		static struct josh_ctx_t ctx;
 		const char *json = "[\"abc";
 
-		size_t len = 0;
-		const char * out = josh_extract(&ctx, json, "[0]", &len);
+		const char * out = josh_extract(&ctx, json, "[0]");
 
 		ASSERT(!out);
-		ASSERT(!len);
+		ASSERT(!ctx.len);
 		ASSERT(ctx.error_id == JOSH_ERROR_STRING_NOT_CLOSED);
 		ASSERT(ctx.line == 1);
 		ASSERT(ctx.column == 6);
@@ -115,11 +108,10 @@ int main(void) {
 		static struct josh_ctx_t ctx;
 		const char *json = "[1x]";
 
-		size_t len = 0;
-		const char * out = josh_extract(&ctx, json, "[0]", &len);
+		const char * out = josh_extract(&ctx, json, "[0]");
 
 		ASSERT(!out);
-		ASSERT(!len);
+		ASSERT(!ctx.len);
 		ASSERT(ctx.error_id == JOSH_ERROR_NUMBER_INVALID);
 		ASSERT(ctx.line == 1);
 		ASSERT(ctx.column == 3);
