@@ -5,7 +5,11 @@ enum josh_error {
 	JOSH_ERROR_EXPECTED_ARRAY,
 	JOSH_ERROR_EMPTY_VALUE,
 	JOSH_ERROR_STRING_NOT_CLOSED,
-	JOSH_ERROR_NUMBER_INVALID
+	JOSH_ERROR_NUMBER_INVALID,
+	JOSH_ERROR_EXPECTED_TRUE,
+	JOSH_ERROR_EXPECTED_FALSE,
+	JOSH_ERROR_EXPECTED_NULL,
+	JOSH_ERROR_EXPECTED_LITERAL,
 };
 
 struct josh_ctx_t {
@@ -24,6 +28,7 @@ static bool inline josh_is_value_terminator(char c) {
 
 bool josh_iter_string(struct josh_ctx_t *ctx);
 bool josh_iter_number(struct josh_ctx_t *ctx);
+bool josh_iter_literal(struct josh_ctx_t *ctx);
 static void josh_iter_whitespace(struct josh_ctx_t *ctx);
 static void inline josh_skip_whitespace(struct josh_ctx_t *ctx);
 
@@ -65,12 +70,15 @@ const char *josh_extract(struct josh_ctx_t *ctx, const char *json, const char *k
 	else if (isdigit(*ctx->ptr)) {
 		if (josh_iter_number(ctx)) return NULL;
 	}
+	else {
+		if (josh_iter_literal(ctx)) return NULL;
+	}
 
 	return value_pos;
 }
 
 bool josh_iter_string(struct josh_ctx_t *ctx) {
-	// Iterate the context until the end of the current string. Return false
+	// Iterate the context until the end of the current string. Return true
 	// if there is an error.
 
 	do {
@@ -90,7 +98,7 @@ bool josh_iter_string(struct josh_ctx_t *ctx) {
 }
 
 bool josh_iter_number(struct josh_ctx_t *ctx) {
-	// Iterate the context until the end of the current number. Return false
+	// Iterate the context until the end of the current number. Return true
 	// if there is an error.
 
 	do {
@@ -100,6 +108,51 @@ bool josh_iter_number(struct josh_ctx_t *ctx) {
 
 	if (!josh_is_value_terminator(*ctx->ptr)) {
 		JOSH_ERROR(ctx, JOSH_ERROR_NUMBER_INVALID);
+
+		return true;
+	}
+
+	return false;
+}
+
+bool josh_iter_literal(struct josh_ctx_t *ctx) {
+	// Iterate to the end of a JSON literal, such as null, true, or false. Return
+	// true if there is an error.
+
+	const char c = *ctx->ptr;
+
+	if (c == 't') {
+		if (strcmp(ctx->ptr, "true") < 0) {
+			JOSH_ERROR(ctx, JOSH_ERROR_EXPECTED_TRUE);
+
+			return true;
+		}
+
+		ctx->ptr += 4;
+		ctx->len += 4;
+	}
+	else if (c == 'f') {
+		if (strcmp(ctx->ptr, "false") < 0) {
+			JOSH_ERROR(ctx, JOSH_ERROR_EXPECTED_FALSE);
+
+			return true;
+		}
+
+		ctx->ptr += 5;
+		ctx->len += 5;
+	}
+	else if (c == 'n') {
+		if (strcmp(ctx->ptr, "null") < 0) {
+			JOSH_ERROR(ctx, JOSH_ERROR_EXPECTED_NULL);
+
+			return true;
+		}
+
+		ctx->ptr += 4;
+		ctx->len += 4;
+	}
+	else {
+		JOSH_ERROR(ctx, JOSH_ERROR_EXPECTED_LITERAL);
 
 		return true;
 	}

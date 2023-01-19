@@ -117,4 +117,48 @@ int main(void) {
 		ASSERT(ctx.column == 3);
 		ASSERT(ctx.offset == 2);
 	}
+
+	TEST("parse JSON true literal") {
+		const char *json = "[true]";
+		static struct josh_ctx_t ctx;
+
+		const char * out = josh_extract(&ctx, json, "[0]");
+
+		ASSERT(ctx.len == 4);
+		ASSERT(out == json + 1);
+	}
+
+	TEST("parse JSON false literal") {
+		const char *json = "[false]";
+		static struct josh_ctx_t ctx;
+
+		const char * out = josh_extract(&ctx, json, "[0]");
+
+		ASSERT(ctx.len == 5);
+		ASSERT(out == json + 1);
+	}
+
+	TEST("parse JSON null literal") {
+		const char *json = "[null]";
+		static struct josh_ctx_t ctx;
+
+		const char * out = josh_extract(&ctx, json, "[0]");
+
+		ASSERT(ctx.len == 4);
+		ASSERT(out == json + 1);
+	}
+
+	TEST("set error when parsing unknown JSON literal") {
+		const char *json = "[xyz]";
+		static struct josh_ctx_t ctx;
+
+		const char * out = josh_extract(&ctx, json, "[0]");
+
+		ASSERT(!out);
+		ASSERT(!ctx.len);
+		ASSERT(ctx.error_id == JOSH_ERROR_EXPECTED_LITERAL);
+		ASSERT(ctx.line == 1);
+		ASSERT(ctx.column == 2);
+		ASSERT(ctx.offset == 1);
+	}
 }
