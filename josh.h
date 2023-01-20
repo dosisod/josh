@@ -2,6 +2,7 @@
 #include <stdbool.h>
 
 enum josh_error {
+	JOSH_ERROR_NONE,
 	JOSH_ERROR_EXPECTED_ARRAY,
 	JOSH_ERROR_EMPTY_VALUE,
 	JOSH_ERROR_STRING_NOT_CLOSED,
@@ -10,6 +11,9 @@ enum josh_error {
 	JOSH_ERROR_EXPECTED_FALSE,
 	JOSH_ERROR_EXPECTED_NULL,
 	JOSH_ERROR_EXPECTED_LITERAL,
+	JOSH_ERROR_EXPECTED_KEY_ARRAY,
+	JOSH_ERROR_KEY_NUMBER_INVALID,
+	JOSH_ERROR_ARRAY_INDEX_NOT_FOUND,
 };
 
 struct josh_ctx_t {
@@ -20,16 +24,22 @@ struct josh_ctx_t {
 	unsigned line;
 	unsigned offset;
 	unsigned column;
+
+	// subject to change
+	unsigned key;
+	unsigned current_index;
+	bool found_key;
 };
 
 static inline bool josh_is_value_terminator(char c) {
 	return c == ',' || c == ']' || c == '}';
 }
 
+bool josh_parse_key(struct josh_ctx_t *ctx, const char *key);
 bool josh_iter_string(struct josh_ctx_t *ctx);
 bool josh_iter_number(struct josh_ctx_t *ctx);
 bool josh_iter_literal(struct josh_ctx_t *ctx);
-static void josh_iter_whitespace(struct josh_ctx_t *ctx);
+static inline void josh_iter_whitespace(struct josh_ctx_t *ctx);
 
 #define JOSH_ERROR(ctx, id) \
 	(ctx)->error_id = (id); \
@@ -39,10 +49,13 @@ static void josh_iter_whitespace(struct josh_ctx_t *ctx);
 	(ctx)->len = 0;
 
 const char *josh_extract(struct josh_ctx_t *ctx, const char *json, const char *key) {
-	(void)key;
-
 	ctx->ptr = json;
 	ctx->start = json;
+	ctx->current_index = 0;
+	ctx->found_key = false;
+	ctx->error_id = JOSH_ERROR_NONE;
+
+	if (!josh_parse_key(ctx, key)) return NULL;
 
 	if (!*ctx->ptr) {
 		JOSH_ERROR(ctx, JOSH_ERROR_EMPTY_VALUE);
@@ -61,20 +74,76 @@ const char *josh_extract(struct josh_ctx_t *ctx, const char *json, const char *k
 	ctx->ptr++;
 	josh_iter_whitespace(ctx);
 
-	const char *value_pos = ctx->ptr;
-	const char c = *ctx->ptr;
+	const char *value_pos = NULL;
+	char c;
 
-	if (c == '\"') {
-		if (josh_iter_string(ctx)) return NULL;
-	}
-	else if (isdigit(c) || c == '-') {
-		if (josh_iter_number(ctx)) return NULL;
-	}
-	else {
-		if (josh_iter_literal(ctx)) return NULL;
+	for (;;) {
+		c = *ctx->ptr;
+
+		if (ctx->key == ctx->current_index) {
+			ctx->found_key = true;
+			value_pos = ctx->ptr;
+		}
+
+		if (c == '\"') {
+			if (josh_iter_string(ctx)) return NULL;
+		}
+		else if (c == ']') {
+			// TODO: throw error if "]" comes after ","
+			JOSH_ERROR(ctx, JOSH_ERROR_ARRAY_INDEX_NOT_FOUND);
+
+			return NULL;
+		}
+		else if (isdigit(c) || c == '-') {
+			if (josh_iter_number(ctx)) return NULL;
+		}
+		else {
+			if (josh_iter_literal(ctx)) return NULL;
+		}
+
+		if (ctx->found_key) break;
+
+		josh_iter_whitespace(ctx);
+		c = *ctx->ptr;
+
+		if (c == ',') {
+			ctx->current_index++;
+			ctx->ptr++;
+			josh_iter_whitespace(ctx);
+		}
 	}
 
 	return value_pos;
+}
+
+bool josh_parse_key(struct josh_ctx_t *ctx, const char *key) {
+	// Parse the JSON extraction schema (the key) into a codified format. Returns
+	// false if an error occurs.
+
+	const size_t len = strlen(key);
+
+	if (key[0] != '[' || key[len - 1] != ']') {
+		JOSH_ERROR(ctx, JOSH_ERROR_EXPECTED_KEY_ARRAY);
+
+		return false;
+	}
+
+	unsigned index = 0;
+
+	for (unsigned i = 1; i < len - 1; i++) {
+		const unsigned num = key[i];
+
+		if (num < '0' || num > '9') {
+			JOSH_ERROR(ctx, JOSH_ERROR_KEY_NUMBER_INVALID);
+
+			return false;
+		}
+
+		index = (index * 10) + (num - '0');
+	}
+
+	ctx->key = index;
+	return true;
 }
 
 bool josh_iter_string(struct josh_ctx_t *ctx) {
@@ -83,7 +152,9 @@ bool josh_iter_string(struct josh_ctx_t *ctx) {
 
 	do {
 		ctx->ptr++;
-		ctx->len++;
+		if (ctx->found_key) {
+			ctx->len++;
+		}
 	} while (*ctx->ptr && *ctx->ptr != '\"');
 
 	if (!*ctx->ptr) {
@@ -92,7 +163,7 @@ bool josh_iter_string(struct josh_ctx_t *ctx) {
 		return true;
 	}
 
-	ctx->len++;
+	if (ctx->found_key) ctx->len++;
 
 	return false;
 }
@@ -102,7 +173,7 @@ bool josh_iter_number(struct josh_ctx_t *ctx) {
 	// if there is an error.
 
 	ctx->ptr++;
-	ctx->len++;
+	if (ctx->found_key) ctx->len++;
 
 	if (ctx->ptr[-1] == '-' && !isdigit(*ctx->ptr)) {
 		JOSH_ERROR(ctx, JOSH_ERROR_NUMBER_INVALID);
@@ -125,7 +196,7 @@ bool josh_iter_number(struct josh_ctx_t *ctx) {
 		}
 
 		ctx->ptr++;
-		ctx->len++;
+		if (ctx->found_key) ctx->len++;
 
 		c = *ctx->ptr;
 	}
@@ -153,7 +224,7 @@ bool josh_iter_literal(struct josh_ctx_t *ctx) {
 		}
 
 		ctx->ptr += 4;
-		ctx->len += 4;
+		if (ctx->found_key) ctx->len += 4;
 	}
 	else if (c == 'f') {
 		if (strcmp(ctx->ptr, "false") < 0) {
@@ -163,7 +234,7 @@ bool josh_iter_literal(struct josh_ctx_t *ctx) {
 		}
 
 		ctx->ptr += 5;
-		ctx->len += 5;
+		if (ctx->found_key) ctx->len += 5;
 	}
 	else if (c == 'n') {
 		if (strcmp(ctx->ptr, "null") < 0) {
@@ -173,7 +244,7 @@ bool josh_iter_literal(struct josh_ctx_t *ctx) {
 		}
 
 		ctx->ptr += 4;
-		ctx->len += 4;
+		if (ctx->found_key) ctx->len += 4;
 	}
 	else {
 		JOSH_ERROR(ctx, JOSH_ERROR_EXPECTED_LITERAL);

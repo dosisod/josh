@@ -199,4 +199,56 @@ int main(void) {
 		ASSERT(ctx.column == 3);
 		ASSERT(ctx.offset == 2);
 	}
+
+	TEST("set error when key number is invalid") {
+		const char *json = "[123]";
+		static struct josh_ctx_t ctx;
+
+		const char * out = josh_extract(&ctx, json, "[xyz]");
+
+		ASSERT(!out);
+		ASSERT(!ctx.len);
+		ASSERT(ctx.error_id == JOSH_ERROR_KEY_NUMBER_INVALID);
+		ASSERT(ctx.line == 1);
+		ASSERT(ctx.column == 1);
+		ASSERT(ctx.offset == 0);
+	}
+
+	TEST("set error when array index is not found") {
+		const char *json = "[]";
+		static struct josh_ctx_t ctx;
+
+		const char * out = josh_extract(&ctx, json, "[0]");
+
+		ASSERT(!out);
+		ASSERT(!ctx.len);
+		ASSERT(ctx.error_id == JOSH_ERROR_ARRAY_INDEX_NOT_FOUND);
+		ASSERT(ctx.line == 1);
+		ASSERT(ctx.column == 2);
+		ASSERT(ctx.offset == 1);
+	}
+
+	TEST("set error when array index is not found") {
+		const char *json = "[]";
+		static struct josh_ctx_t ctx;
+
+		const char * out = josh_extract(&ctx, json, "[0]");
+
+		ASSERT(!out);
+		ASSERT(!ctx.len);
+		ASSERT(ctx.error_id == JOSH_ERROR_ARRAY_INDEX_NOT_FOUND);
+		ASSERT(ctx.line == 1);
+		ASSERT(ctx.column == 2);
+		ASSERT(ctx.offset == 1);
+	}
+
+	TEST("parse nth key from array") {
+		const char *json = "[1, 2, 3]";
+		static struct josh_ctx_t ctx;
+
+		const char * out = josh_extract(&ctx, json, "[2]");
+
+		ASSERT(ctx.len == 1);
+		ASSERT(out == json + 7);
+	}
 }
