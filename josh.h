@@ -22,7 +22,7 @@ struct josh_ctx_t {
 	unsigned column;
 };
 
-static bool inline josh_is_value_terminator(char c) {
+static inline bool josh_is_value_terminator(char c) {
 	return c == ',' || c == ']' || c == '}';
 }
 
@@ -30,7 +30,6 @@ bool josh_iter_string(struct josh_ctx_t *ctx);
 bool josh_iter_number(struct josh_ctx_t *ctx);
 bool josh_iter_literal(struct josh_ctx_t *ctx);
 static void josh_iter_whitespace(struct josh_ctx_t *ctx);
-static void inline josh_skip_whitespace(struct josh_ctx_t *ctx);
 
 #define JOSH_ERROR(ctx, id) \
 	(ctx)->error_id = (id); \
@@ -63,11 +62,12 @@ const char *josh_extract(struct josh_ctx_t *ctx, const char *json, const char *k
 	josh_iter_whitespace(ctx);
 
 	const char *value_pos = ctx->ptr;
+	const char c = *ctx->ptr;
 
-	if (*ctx->ptr == '\"') {
+	if (c == '\"') {
 		if (josh_iter_string(ctx)) return NULL;
 	}
-	else if (isdigit(*ctx->ptr)) {
+	else if (isdigit(c) || c == '-') {
 		if (josh_iter_number(ctx)) return NULL;
 	}
 	else {
@@ -101,10 +101,34 @@ bool josh_iter_number(struct josh_ctx_t *ctx) {
 	// Iterate the context until the end of the current number. Return true
 	// if there is an error.
 
-	do {
+	ctx->ptr++;
+	ctx->len++;
+
+	if (ctx->ptr[-1] == '-' && !isdigit(*ctx->ptr)) {
+		JOSH_ERROR(ctx, JOSH_ERROR_NUMBER_INVALID);
+
+		return true;
+	}
+
+	char c = *ctx->ptr;
+	bool has_seen_period = false;
+
+	while (c && (isdigit(c) || c == '.')) {
+		if (c == '.') {
+			if (has_seen_period) {
+				JOSH_ERROR(ctx, JOSH_ERROR_NUMBER_INVALID);
+
+				return true;
+			}
+
+			has_seen_period = true;
+		}
+
 		ctx->ptr++;
 		ctx->len++;
-	} while (*ctx->ptr && isdigit(*ctx->ptr));
+
+		c = *ctx->ptr;
+	}
 
 	if (!josh_is_value_terminator(*ctx->ptr)) {
 		JOSH_ERROR(ctx, JOSH_ERROR_NUMBER_INVALID);
@@ -160,7 +184,7 @@ bool josh_iter_literal(struct josh_ctx_t *ctx) {
 	return false;
 }
 
-static void inline josh_iter_whitespace(struct josh_ctx_t *ctx) {
+static inline void josh_iter_whitespace(struct josh_ctx_t *ctx) {
 	// Iterate context to next non whitespace character. This function does not
 	// update the `len` field in the context.
 

@@ -161,4 +161,42 @@ int main(void) {
 		ASSERT(ctx.column == 2);
 		ASSERT(ctx.offset == 1);
 	}
+
+	TEST("parse negative number") {
+		const char *json = "[-123]";
+		static struct josh_ctx_t ctx;
+
+		const char * out = josh_extract(&ctx, json, "[0]");
+
+		ASSERT(ctx.len == 4);
+		ASSERT(out == json + 1);
+	}
+
+	TEST("set error when number contains multiple periods") {
+		const char *json = "[1.2.3]";
+		static struct josh_ctx_t ctx;
+
+		const char * out = josh_extract(&ctx, json, "[0]");
+
+		ASSERT(!out);
+		ASSERT(!ctx.len);
+		ASSERT(ctx.error_id == JOSH_ERROR_NUMBER_INVALID);
+		ASSERT(ctx.line == 1);
+		ASSERT(ctx.column == 5);
+		ASSERT(ctx.offset == 4);
+	}
+
+	TEST("set error when decimal doesnt have leading digit") {
+		const char *json = "[-.1]";
+		static struct josh_ctx_t ctx;
+
+		const char * out = josh_extract(&ctx, json, "[0]");
+
+		ASSERT(!out);
+		ASSERT(!ctx.len);
+		ASSERT(ctx.error_id == JOSH_ERROR_NUMBER_INVALID);
+		ASSERT(ctx.line == 1);
+		ASSERT(ctx.column == 3);
+		ASSERT(ctx.offset == 2);
+	}
 }
