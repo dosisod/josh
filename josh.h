@@ -14,6 +14,8 @@ enum josh_error {
 	JOSH_ERROR_EXPECTED_KEY_ARRAY,
 	JOSH_ERROR_KEY_NUMBER_INVALID,
 	JOSH_ERROR_ARRAY_INDEX_NOT_FOUND,
+	JOSH_ERROR_INVALID_ESCAPE_CODE,
+	JOSH_ERROR_INVALID_UNICODE_ESCAPE_CODE,
 };
 
 struct josh_ctx_t {
@@ -42,6 +44,7 @@ bool josh_iter_string(struct josh_ctx_t *ctx);
 bool josh_iter_number(struct josh_ctx_t *ctx);
 bool josh_iter_literal(struct josh_ctx_t *ctx);
 static inline void josh_iter_whitespace(struct josh_ctx_t *ctx);
+static inline char josh_step_char(struct josh_ctx_t *ctx);
 
 #define JOSH_ERROR(ctx, id) \
 	(ctx)->error_id = (id); \
@@ -68,8 +71,7 @@ const char *josh_extract(struct josh_ctx_t *ctx, const char *json, const char *k
 
 	josh_iter_whitespace(ctx);
 
-	const char *x = josh_iter_value(ctx);
-	return x;
+	return josh_iter_value(ctx);
 }
 
 const char *josh_iter_value(struct josh_ctx_t *ctx) {
@@ -79,8 +81,7 @@ const char *josh_iter_value(struct josh_ctx_t *ctx) {
 		return NULL;
 	}
 
-	ctx->ptr++;
-	if (ctx->found_key) ctx->len++;
+	josh_step_char(ctx);
 
 	josh_iter_whitespace(ctx);
 
@@ -124,8 +125,7 @@ const char *josh_iter_value(struct josh_ctx_t *ctx) {
 			if (!found_key) value_pos = pos;
 
 			// TODO: check that "]" actually exists
-			ctx->ptr++;
-			if (ctx->found_key) ctx->len++;
+			josh_step_char(ctx);
 		}
 		else if (isdigit(c) || c == '-') {
 			if (josh_iter_number(ctx)) return NULL;
@@ -141,8 +141,7 @@ const char *josh_iter_value(struct josh_ctx_t *ctx) {
 
 		if (c == ',') {
 			ctx->current_index++;
-			ctx->ptr++;
-			if (ctx->found_key) ctx->len++;
+			josh_step_char(ctx);
 			josh_iter_whitespace(ctx);
 		}
 	}
@@ -184,20 +183,58 @@ bool josh_iter_string(struct josh_ctx_t *ctx) {
 	// Iterate the context until the end of the current string. Return true
 	// if there is an error.
 
-	do {
-		ctx->ptr++;
-		if (ctx->found_key) {
-			ctx->len++;
-		}
-	} while (*ctx->ptr && *ctx->ptr != '\"');
+	char c = josh_step_char(ctx);
 
-	if (!*ctx->ptr) {
+	while (c) {
+		if (c == '\\') {
+			c = josh_step_char(ctx);
+
+			if (
+				c == '\"' ||
+				c == '\\' ||
+				c == '/' ||
+				c == 'b' ||
+				c == 'f' ||
+				c == 'n' ||
+				c == 't' ||
+				c == 'r'
+			) {
+				c = josh_step_char(ctx);
+
+				continue;
+			}
+			else if (c == 'u') {
+				for (unsigned i = 0; i < 4; i++) {
+					c = josh_step_char(ctx);
+
+					if (!isxdigit(c)) {
+						JOSH_ERROR(ctx, JOSH_ERROR_INVALID_UNICODE_ESCAPE_CODE);
+
+						return true;
+					}
+				}
+
+				continue;
+			}
+			else {
+				JOSH_ERROR(ctx, JOSH_ERROR_INVALID_ESCAPE_CODE);
+
+				return true;
+			}
+		}
+		else if (c == '\"') {
+			josh_step_char(ctx);
+			break;
+		}
+
+		c = josh_step_char(ctx);
+	}
+
+	if (!c) {
 		JOSH_ERROR(ctx, JOSH_ERROR_STRING_NOT_CLOSED);
 
 		return true;
 	}
-
-	if (ctx->found_key) ctx->len++;
 
 	return false;
 }
@@ -206,8 +243,7 @@ bool josh_iter_number(struct josh_ctx_t *ctx) {
 	// Iterate the context until the end of the current number. Return true
 	// if there is an error.
 
-	ctx->ptr++;
-	if (ctx->found_key) ctx->len++;
+	josh_step_char(ctx);
 
 	if (ctx->ptr[-1] == '-' && !isdigit(*ctx->ptr)) {
 		JOSH_ERROR(ctx, JOSH_ERROR_NUMBER_INVALID);
@@ -229,10 +265,7 @@ bool josh_iter_number(struct josh_ctx_t *ctx) {
 			has_seen_period = true;
 		}
 
-		ctx->ptr++;
-		if (ctx->found_key) ctx->len++;
-
-		c = *ctx->ptr;
+		c = josh_step_char(ctx);
 	}
 
 	if (!josh_is_value_terminator(*ctx->ptr)) {
@@ -293,9 +326,12 @@ static inline void josh_iter_whitespace(struct josh_ctx_t *ctx) {
 	// Iterate context to next non whitespace character. This function does not
 	// update the `len` field in the context.
 
-	while (isspace(*ctx->ptr)) {
-		ctx->ptr++;
+	while (isspace(*ctx->ptr)) josh_step_char(ctx);
+}
 
-		if (ctx->found_key) ctx->len++;
-	}
+static inline char josh_step_char(struct josh_ctx_t *ctx) {
+	// Advance the context by a single character, returning the new character.
+
+	if (ctx->found_key) ctx->len++;
+	return *(++ctx->ptr);
 }

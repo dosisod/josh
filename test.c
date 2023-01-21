@@ -255,11 +255,49 @@ int main(void) {
 	TEST("parse nested array") {
 		const char *json = "[[1, 2, 3]]";
 		static struct josh_ctx_t ctx;
-		memset(&ctx, 0, sizeof ctx);
 
 		const char * out = josh_extract(&ctx, json, "[0]");
 
 		ASSERT(ctx.len == 9);
 		ASSERT(out == json + 1);
+	}
+
+	TEST("parse string with escape chars") {
+		/* json = ["\" \\ \/ \b \f \n \r \t \u1234"] */
+		const char *json = "[\"\\\" \\\\ \\/ \\b \\f \\n \\r \\t \\u1234\"]";
+		static struct josh_ctx_t ctx;
+
+		const char * out = josh_extract(&ctx, json, "[0]");
+
+		ASSERT(ctx.len == 32);
+		ASSERT(out == json + 1);
+	}
+
+	TEST("set error when invalid escape char is found") {
+		const char *json = "[\"\\z\"]";
+		static struct josh_ctx_t ctx;
+
+		const char * out = josh_extract(&ctx, json, "[0]");
+
+		ASSERT(!out);
+		ASSERT(!ctx.len);
+		ASSERT(ctx.error_id == JOSH_ERROR_INVALID_ESCAPE_CODE);
+		ASSERT(ctx.line == 1);
+		ASSERT(ctx.column == 4);
+		ASSERT(ctx.offset == 3);
+	}
+
+	TEST("set error when invalid unicode escape is found") {
+		const char *json = "[\"\\u123x\"]";
+		static struct josh_ctx_t ctx;
+
+		const char * out = josh_extract(&ctx, json, "[0]");
+
+		ASSERT(!out);
+		ASSERT(!ctx.len);
+		ASSERT(ctx.error_id == JOSH_ERROR_INVALID_UNICODE_ESCAPE_CODE);
+		ASSERT(ctx.line == 1);
+		ASSERT(ctx.column == 8);
+		ASSERT(ctx.offset == 7);
 	}
 }
