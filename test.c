@@ -251,4 +251,15 @@ int main(void) {
 		ASSERT(ctx.len == 1);
 		ASSERT(out == json + 7);
 	}
+
+	TEST("parse nested array") {
+		const char *json = "[[1, 2, 3]]";
+		static struct josh_ctx_t ctx;
+		memset(&ctx, 0, sizeof ctx);
+
+		const char * out = josh_extract(&ctx, json, "[0]");
+
+		ASSERT(ctx.len == 9);
+		ASSERT(out == json + 1);
+	}
 }

@@ -28,6 +28,7 @@ struct josh_ctx_t {
 	// subject to change
 	unsigned key;
 	unsigned current_index;
+	unsigned current_level;
 	bool found_key;
 };
 
@@ -36,6 +37,7 @@ static inline bool josh_is_value_terminator(char c) {
 }
 
 bool josh_parse_key(struct josh_ctx_t *ctx, const char *key);
+const char *josh_iter_value(struct josh_ctx_t *ctx);
 bool josh_iter_string(struct josh_ctx_t *ctx);
 bool josh_iter_number(struct josh_ctx_t *ctx);
 bool josh_iter_literal(struct josh_ctx_t *ctx);
@@ -52,6 +54,7 @@ const char *josh_extract(struct josh_ctx_t *ctx, const char *json, const char *k
 	ctx->ptr = json;
 	ctx->start = json;
 	ctx->current_index = 0;
+	ctx->current_level = 0;
 	ctx->found_key = false;
 	ctx->error_id = JOSH_ERROR_NONE;
 
@@ -65,6 +68,11 @@ const char *josh_extract(struct josh_ctx_t *ctx, const char *json, const char *k
 
 	josh_iter_whitespace(ctx);
 
+	const char *x = josh_iter_value(ctx);
+	return x;
+}
+
+const char *josh_iter_value(struct josh_ctx_t *ctx) {
 	if (*ctx->ptr != '[') {
 		JOSH_ERROR(ctx, JOSH_ERROR_EXPECTED_ARRAY);
 
@@ -72,27 +80,52 @@ const char *josh_extract(struct josh_ctx_t *ctx, const char *json, const char *k
 	}
 
 	ctx->ptr++;
+	if (ctx->found_key) ctx->len++;
+
 	josh_iter_whitespace(ctx);
 
-	const char *value_pos = NULL;
+	const char *value_pos = ctx->ptr;
 	char c;
+	bool found_key = false;
 
 	for (;;) {
 		c = *ctx->ptr;
 
-		if (ctx->key == ctx->current_index) {
+		if (c == ']') {
+			if (ctx->found_key) return value_pos;
+
+			// TODO: throw error if "]" comes after ","
+			JOSH_ERROR(ctx, JOSH_ERROR_ARRAY_INDEX_NOT_FOUND);
+
+			return NULL;
+		}
+
+		if (ctx->key == ctx->current_index && ctx->current_level == 0) {
 			ctx->found_key = true;
+			found_key = true;
 			value_pos = ctx->ptr;
 		}
 
 		if (c == '\"') {
 			if (josh_iter_string(ctx)) return NULL;
 		}
-		else if (c == ']') {
-			// TODO: throw error if "]" comes after ","
-			JOSH_ERROR(ctx, JOSH_ERROR_ARRAY_INDEX_NOT_FOUND);
+		else if (c == '[') {
+			const unsigned temp = ctx->current_index;
+			ctx->current_index = 0;
+			ctx->current_level++;
 
-			return NULL;
+			const char *pos = josh_iter_value(ctx);
+
+			ctx->current_level--;
+			ctx->current_index = temp;
+
+			if (!pos) return NULL;
+
+			if (!found_key) value_pos = pos;
+
+			// TODO: check that "]" actually exists
+			ctx->ptr++;
+			if (ctx->found_key) ctx->len++;
 		}
 		else if (isdigit(c) || c == '-') {
 			if (josh_iter_number(ctx)) return NULL;
@@ -101,7 +134,7 @@ const char *josh_extract(struct josh_ctx_t *ctx, const char *json, const char *k
 			if (josh_iter_literal(ctx)) return NULL;
 		}
 
-		if (ctx->found_key) break;
+		if (found_key) break;
 
 		josh_iter_whitespace(ctx);
 		c = *ctx->ptr;
@@ -109,6 +142,7 @@ const char *josh_extract(struct josh_ctx_t *ctx, const char *json, const char *k
 		if (c == ',') {
 			ctx->current_index++;
 			ctx->ptr++;
+			if (ctx->found_key) ctx->len++;
 			josh_iter_whitespace(ctx);
 		}
 	}
@@ -259,5 +293,9 @@ static inline void josh_iter_whitespace(struct josh_ctx_t *ctx) {
 	// Iterate context to next non whitespace character. This function does not
 	// update the `len` field in the context.
 
-	while (isspace(*ctx->ptr)) ctx->ptr++;
+	while (isspace(*ctx->ptr)) {
+		ctx->ptr++;
+
+		if (ctx->found_key) ctx->len++;
+	}
 }
