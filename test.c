@@ -112,7 +112,7 @@ int main(void) {
 
 		ASSERT(!out);
 		ASSERT(!ctx.len);
-		ASSERT(ctx.error_id == JOSH_ERROR_NUMBER_INVALID);
+		ASSERT(ctx.error_id == JOSH_ERROR_DIGIT_EXPECTED);
 		ASSERT(ctx.line == 1);
 		ASSERT(ctx.column == 3);
 		ASSERT(ctx.offset == 2);
@@ -180,7 +180,7 @@ int main(void) {
 
 		ASSERT(!out);
 		ASSERT(!ctx.len);
-		ASSERT(ctx.error_id == JOSH_ERROR_NUMBER_INVALID);
+		ASSERT(ctx.error_id == JOSH_ERROR_DIGIT_EXPECTED);
 		ASSERT(ctx.line == 1);
 		ASSERT(ctx.column == 5);
 		ASSERT(ctx.offset == 4);
@@ -194,7 +194,7 @@ int main(void) {
 
 		ASSERT(!out);
 		ASSERT(!ctx.len);
-		ASSERT(ctx.error_id == JOSH_ERROR_NUMBER_INVALID);
+		ASSERT(ctx.error_id == JOSH_ERROR_DIGIT_EXPECTED);
 		ASSERT(ctx.line == 1);
 		ASSERT(ctx.column == 3);
 		ASSERT(ctx.offset == 2);
@@ -408,17 +408,13 @@ int main(void) {
 		ASSERT(ctx.offset == 1);
 	}
 
-	TEST("set error when using array key on object") {
-		const char *json = "123";
+	TEST("parse numbers with exponents") {
+		const char *json = "[[1e3, 1E3, 1.2e3, 1.2E3, 1e+3, 1e-3]]";
 		static struct josh_ctx_t ctx;
 
-		const char * out = josh_extract(&ctx, json, ".abc");
+		const char * out = josh_extract(&ctx, json, "[0]");
 
-		ASSERT(!out);
-		ASSERT(!ctx.len);
-		ASSERT(ctx.error_id == JOSH_ERROR_EXPECTED_OBJECT);
-		ASSERT(ctx.line == 1);
-		ASSERT(ctx.column == 0);
-		ASSERT(ctx.offset == 0);
+		ASSERT(ctx.len == 36);
+		ASSERT(out == json + 1);
 	}
 }

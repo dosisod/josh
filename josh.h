@@ -7,7 +7,7 @@ enum josh_error {
 	JOSH_ERROR_EXPECTED_OBJECT,
 	JOSH_ERROR_EMPTY_VALUE,
 	JOSH_ERROR_STRING_NOT_CLOSED,
-	JOSH_ERROR_NUMBER_INVALID,
+	JOSH_ERROR_DIGIT_EXPECTED,
 	JOSH_ERROR_EXPECTED_TRUE,
 	JOSH_ERROR_EXPECTED_FALSE,
 	JOSH_ERROR_EXPECTED_NULL,
@@ -366,38 +366,39 @@ bool josh_iter_number(struct josh_ctx_t *ctx) {
 	// Iterate the context until the end of the current number. Return true
 	// if the function succeeds.
 
-	josh_step_char(ctx);
-
-	if (ctx->ptr[-1] == '-' && !isdigit(*ctx->ptr)) {
-		JOSH_ERROR(ctx, JOSH_ERROR_NUMBER_INVALID);
-
-		return false;
-	}
-
+	if (*ctx->ptr == '-') josh_step_char(ctx);
 	char c = *ctx->ptr;
-	bool has_seen_period = false;
+	const char *started_at = ctx->ptr;
 
-	while (c && (isdigit(c) || c == '.')) {
-		if (c == '.') {
-			if (has_seen_period) {
-				JOSH_ERROR(ctx, JOSH_ERROR_NUMBER_INVALID);
+	while (c && isdigit(c)) c = josh_step_char(ctx);
+	if (ctx->ptr == started_at) goto fail;
 
-				return false;
-			}
-
-			has_seen_period = true;
-		}
-
+	if (c == '.') {
 		c = josh_step_char(ctx);
+
+		started_at = ctx->ptr;
+		while (c && isdigit(c)) c = josh_step_char(ctx);
+		if (ctx->ptr == started_at) goto fail;
 	}
 
-	if (!josh_is_value_terminator(*ctx->ptr)) {
-		JOSH_ERROR(ctx, JOSH_ERROR_NUMBER_INVALID);
+	if (c == 'e' || c == 'E') {
+		c = josh_step_char(ctx);
 
-		return false;
+		if (c == '-' || c == '+') c = josh_step_char(ctx);
+
+		started_at = ctx->ptr;
+		while (c && isdigit(c)) c = josh_step_char(ctx);
+		if (ctx->ptr == started_at) goto fail;
 	}
+
+	if (!josh_is_value_terminator(*ctx->ptr)) goto fail;
 
 	return true;
+
+fail:
+	JOSH_ERROR(ctx, JOSH_ERROR_DIGIT_EXPECTED);
+
+	return false;
 }
 
 bool josh_iter_literal(struct josh_ctx_t *ctx) {
