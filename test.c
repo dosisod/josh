@@ -44,7 +44,7 @@ int main(void) {
 	}
 
 	TEST("error set if non-array value found for array index key") {
-		const char *json = "{}";
+		const char *json = "123";
 		static struct josh_ctx_t ctx;
 
 		const char * out = josh_extract(&ctx, json, "[0]");
@@ -248,6 +248,7 @@ int main(void) {
 
 		const char * out = josh_extract(&ctx, json, "[2]");
 
+		ASSERT(ctx.key == 2);
 		ASSERT(ctx.len == 1);
 		ASSERT(out == json + 7);
 	}
@@ -299,5 +300,125 @@ int main(void) {
 		ASSERT(ctx.line == 1);
 		ASSERT(ctx.column == 8);
 		ASSERT(ctx.offset == 7);
+	}
+
+	TEST("set error for invalid object key") {
+		const char *json = "";
+		static struct josh_ctx_t ctx;
+
+		const char * out = josh_extract(&ctx, json, ".");
+
+		ASSERT(!out);
+		ASSERT(!ctx.len);
+		ASSERT(ctx.error_id == JOSH_ERROR_INVALID_KEY_OBJECT);
+		ASSERT(ctx.line == 1);
+		ASSERT(ctx.column == 1);
+		ASSERT(ctx.offset == 0);
+	}
+
+	TEST("parse object key") {
+		const char *json = "{}";
+		static struct josh_ctx_t ctx;
+
+		josh_extract(&ctx, json, ".abc");
+
+		ASSERT(ctx.key_str);
+		ASSERT(strcmp(ctx.key_str, "abc") == 0);
+	}
+
+	TEST("parse empty object") {
+		const char *json = "[{}]";
+		static struct josh_ctx_t ctx;
+
+		const char * out = josh_extract(&ctx, json, "[0]");
+
+		ASSERT(ctx.len == 2);
+		ASSERT(out == json + 1);
+	}
+
+	TEST("parse object with key") {
+		const char *json = "[{\"abc\": 123}]";
+		static struct josh_ctx_t ctx;
+
+		const char * out = josh_extract(&ctx, json, "[0]");
+
+		ASSERT(ctx.len == 12);
+		ASSERT(out == json + 1);
+	}
+
+	TEST("parse object with multiple keys") {
+		const char *json = "[{\"abc\": 123, \"def\": 456}]";
+		static struct josh_ctx_t ctx;
+
+		const char * out = josh_extract(&ctx, json, "[0]");
+
+		ASSERT(ctx.len == 24);
+		ASSERT(out == json + 1);
+	}
+
+	TEST("parse object using object key") {
+		const char *json = "{\"abc\": 123, \"def\": 456}";
+		static struct josh_ctx_t ctx;
+
+		const char * out = josh_extract(&ctx, json, ".def");
+
+		ASSERT(ctx.len == 3);
+		ASSERT(out == json + 20);
+	}
+
+	TEST("set error for object key missing colon") {
+		const char *json = "{\"abc\" 123}";
+		static struct josh_ctx_t ctx;
+
+		const char * out = josh_extract(&ctx, json, ".abc");
+
+		ASSERT(!out);
+		ASSERT(!ctx.len);
+		ASSERT(ctx.error_id == JOSH_ERROR_EXPECTED_COLON);
+		ASSERT(ctx.line == 1);
+		ASSERT(ctx.column == 8);
+		ASSERT(ctx.offset == 7);
+	}
+
+	TEST("set error for object key using non-string key") {
+		const char *json = "{123}";
+		static struct josh_ctx_t ctx;
+
+		const char * out = josh_extract(&ctx, json, ".abc");
+
+		ASSERT(!out);
+		ASSERT(!ctx.len);
+		ASSERT(ctx.error_id == JOSH_ERROR_EXPECTED_STRING);
+		ASSERT(ctx.line == 1);
+		ASSERT(ctx.column == 2);
+		ASSERT(ctx.offset == 1);
+	}
+
+	TEST("set error for non existent object key") {
+		const char *json = "{}";
+		static struct josh_ctx_t ctx;
+
+		const char * out = josh_extract(&ctx, json, ".abc");
+
+		ASSERT(!out);
+		ASSERT(!ctx.len);
+		ASSERT(ctx.error_id == JOSH_ERROR_OBJECT_KEY_NOT_FOUND);
+		ASSERT(ctx.line == 1);
+		ASSERT(ctx.column == 2);
+		ASSERT(ctx.offset == 1);
+	}
+
+	TEST("set error when using array key on object") {
+		const char *json = "123";
+		static struct josh_ctx_t ctx;
+
+		const char * out = josh_extract(&ctx, json, ".abc");
+
+		ASSERT(!out);
+		ASSERT(!ctx.len);
+		ASSERT(ctx.error_id == JOSH_ERROR_EXPECTED_OBJECT);
+		ASSERT(ctx.line == 1);
+		ASSERT(ctx.column == 0);
+		ASSERT(ctx.offset == 0);
 	}
 }
