@@ -431,4 +431,17 @@ int main(void) {
 		ASSERT(ctx.column == 2);
 		ASSERT(ctx.offset == 1);
 	}
+
+	TEST("set error with column and line info set") {
+		const char *json = "[\n  x]";
+		static struct josh_ctx_t ctx;
+
+		const char * out = josh_extract(&ctx, json, "[0]");
+
+		ASSERT(!out);
+		ASSERT(!ctx.len);
+		ASSERT(ctx.line == 2);
+		ASSERT(ctx.column == 3);
+		ASSERT(ctx.offset == 4);
+	}
 }

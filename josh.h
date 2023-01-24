@@ -65,14 +65,13 @@ static inline char josh_step_char(struct josh_ctx_t *ctx);
 
 #define JOSH_ERROR(ctx, id) \
 	(ctx)->error_id = (id); \
-	(ctx)->line = 1; \
-	(ctx)->column = (unsigned)((ctx)->ptr -(ctx)->start + 1); \
 	(ctx)->offset = (unsigned)((ctx)->ptr - (ctx)->start); \
 	(ctx)->len = 0;
 
 const char *josh_extract(struct josh_ctx_t *ctx, const char *json, const char *key) {
 	memset(ctx, 0, sizeof(*ctx));
 	ctx->ptr = ctx->start = json;
+	ctx->line = ctx->column = 1;
 
 	if (!josh_parse_key(ctx, key)) return NULL;
 
@@ -458,7 +457,12 @@ static inline void josh_iter_whitespace(struct josh_ctx_t *ctx) {
 
 	char c = *ctx->ptr;
 
-	while (c == ' ' || c == '\t' || c == '\f' || c == '\r') {
+	while (c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == '\f') {
+		if (c == '\n') {
+			ctx->line++;
+			ctx->column = 0;
+		}
+
 		c = josh_step_char(ctx);
 	}
 }
@@ -466,6 +470,7 @@ static inline void josh_iter_whitespace(struct josh_ctx_t *ctx) {
 static inline char josh_step_char(struct josh_ctx_t *ctx) {
 	// Advance the context by a single character, returning the new character.
 
+	ctx->column++;
 	if (ctx->found_key) ctx->len++;
 	return *(++ctx->ptr);
 }
