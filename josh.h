@@ -21,6 +21,7 @@ enum josh_error {
 	JOSH_ERROR_INVALID_KEY_OBJECT,
 	JOSH_ERROR_EXPECTED_STRING,
 	JOSH_ERROR_EXPECTED_COLON,
+	JOSH_ERROR_NO_LEADING_ZERO,
 };
 
 enum josh_key_type_t {
@@ -369,6 +370,12 @@ bool josh_iter_number(struct josh_ctx_t *ctx) {
 	if (*ctx->ptr == '-') josh_step_char(ctx);
 	char c = *ctx->ptr;
 	const char *started_at = ctx->ptr;
+
+	if (c == '0' && ctx->ptr[1] != '.') {
+		JOSH_ERROR(ctx, JOSH_ERROR_NO_LEADING_ZERO);
+
+		return false;
+	}
 
 	while (c && isdigit(c)) c = josh_step_char(ctx);
 	if (ctx->ptr == started_at) goto fail;

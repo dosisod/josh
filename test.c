@@ -417,4 +417,18 @@ int main(void) {
 		ASSERT(ctx.len == 36);
 		ASSERT(out == json + 1);
 	}
+
+	TEST("set error for number with leading zero") {
+		const char *json = "[0123]";
+		static struct josh_ctx_t ctx;
+
+		const char * out = josh_extract(&ctx, json, "[0]");
+
+		ASSERT(!out);
+		ASSERT(!ctx.len);
+		ASSERT(ctx.error_id == JOSH_ERROR_NO_LEADING_ZERO);
+		ASSERT(ctx.line == 1);
+		ASSERT(ctx.column == 2);
+		ASSERT(ctx.offset == 1);
+	}
 }
