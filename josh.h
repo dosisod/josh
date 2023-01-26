@@ -1,5 +1,6 @@
 #include <ctype.h>
 #include <stdbool.h>
+#include <string.h>
 
 enum josh_error {
 	JOSH_ERROR_NONE,
@@ -274,7 +275,7 @@ bool josh_parse_key(struct josh_ctx_t *ctx, const char *key) {
 			unsigned index = 0;
 
 			for (unsigned i = 1; i < len - 1; i++) {
-				const unsigned num = key[i];
+				const char num = key[i];
 
 				if (num < '0' || num > '9') {
 					JOSH_ERROR(ctx, JOSH_ERROR_KEY_NUMBER_INVALID);
@@ -282,7 +283,7 @@ bool josh_parse_key(struct josh_ctx_t *ctx, const char *key) {
 					return false;
 				}
 
-				index = (index * 10) + (num - '0');
+				index = (index * 10) + ((unsigned)num - '0');
 			}
 
 			ctx->key = index;
