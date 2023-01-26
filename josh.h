@@ -270,22 +270,37 @@ bool josh_parse_key(struct josh_ctx_t *ctx, const char *key) {
 			return false;
 		}
 
-		unsigned index = 0;
+		if (isdigit(key[1])) {
+			unsigned index = 0;
 
-		for (unsigned i = 1; i < len - 1; i++) {
-			const unsigned num = key[i];
+			for (unsigned i = 1; i < len - 1; i++) {
+				const unsigned num = key[i];
 
-			if (num < '0' || num > '9') {
-				JOSH_ERROR(ctx, JOSH_ERROR_KEY_NUMBER_INVALID);
+				if (num < '0' || num > '9') {
+					JOSH_ERROR(ctx, JOSH_ERROR_KEY_NUMBER_INVALID);
 
-				return false;
+					return false;
+				}
+
+				index = (index * 10) + (num - '0');
 			}
 
-			index = (index * 10) + (num - '0');
+			ctx->key = index;
+			ctx->key_type = JOSH_KEY_TYPE_ARRAY;
 		}
-
-		ctx->key = index;
-		ctx->key_type = JOSH_KEY_TYPE_ARRAY;
+		else if (key[1] == '\"') {
+			// TODO: check that the last char is '"'
+			// TODO: make a copy of this string. Currently we just take a
+			// pointer to the key, which means that it will not be null
+			// terminated. This shouldn't be an issue because a string
+			// cannot be matched to quote ('"'), as it must be escaped.
+			// Still, this hackery should be averted if possible.
+			ctx->key_str = key + 2;
+			ctx->key_type = JOSH_KEY_TYPE_OBJECT;
+		}
+		else {
+			// TODO: throw error
+		}
 	}
 	else if (key[0] == '.') {
 		// TODO: validate dot notation uses valid JS identifier

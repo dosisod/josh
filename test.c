@@ -204,7 +204,7 @@ int main(void) {
 		const char *json = "[123]";
 		static struct josh_ctx_t ctx;
 
-		const char * out = josh_extract(&ctx, json, "[xyz]");
+		const char * out = josh_extract(&ctx, json, "[123xyz]");
 
 		ASSERT(!out);
 		ASSERT(!ctx.len);
@@ -443,5 +443,15 @@ int main(void) {
 		ASSERT(ctx.line == 2);
 		ASSERT(ctx.column == 3);
 		ASSERT(ctx.offset == 4);
+	}
+
+	TEST("parse string in array as dictionary key") {
+		const char *json = "{\"abc\": 123}";
+		static struct josh_ctx_t ctx;
+
+		const char * out = josh_extract(&ctx, json, "[\"abc\"]");
+
+		ASSERT(ctx.len == 3);
+		ASSERT(out == json + 8);
 	}
 }
