@@ -22,12 +22,13 @@
 	} \
 }
 
+static struct josh_ctx_t ctx;
+
 int main(void) {
 	TEST("simple array access") {
 		const char *json = "[1]";
-		static struct josh_ctx_t ctx;
 
-		const char * out = josh_extract(&ctx, json, "[0]");
+		const char *out = josh_extract(&ctx, json, "[0]");
 
 		ASSERT(ctx.len == 1);
 		ASSERT(out == json + 1);
@@ -35,9 +36,8 @@ int main(void) {
 
 	TEST("leading whitespace is skipped") {
 		const char *json = "   [1]";
-		static struct josh_ctx_t ctx;
 
-		const char * out = josh_extract(&ctx, json, "[0]");
+		const char *out = josh_extract(&ctx, json, "[0]");
 
 		ASSERT(ctx.len == 1);
 		ASSERT(out == json + 4);
@@ -45,9 +45,8 @@ int main(void) {
 
 	TEST("error set if non-array value found for array index key") {
 		const char *json = "123";
-		static struct josh_ctx_t ctx;
 
-		const char * out = josh_extract(&ctx, json, "[0]");
+		const char *out = josh_extract(&ctx, json, "[0]");
 
 		ASSERT(!out);
 		ASSERT(!ctx.len);
@@ -58,9 +57,7 @@ int main(void) {
 	}
 
 	TEST("error set if JSON string is empty") {
-		static struct josh_ctx_t ctx;
-
-		const char * out = josh_extract(&ctx, "", "[0]");
+		const char *out = josh_extract(&ctx, "", "[0]");
 
 		ASSERT(!out);
 		ASSERT(!ctx.len);
@@ -72,9 +69,8 @@ int main(void) {
 
 	TEST("multi digit numbers return correct length") {
 		const char *json = "[123]";
-		static struct josh_ctx_t ctx;
 
-		const char * out = josh_extract(&ctx, json, "[0]");
+		const char *out = josh_extract(&ctx, json, "[0]");
 
 		ASSERT(ctx.len == 3);
 		ASSERT(out == json + 1);
@@ -82,19 +78,17 @@ int main(void) {
 
 	TEST("string is able to be parsed") {
 		const char *json = "[\"abc\"]";
-		static struct josh_ctx_t ctx;
 
-		const char * out = josh_extract(&ctx, json, "[0]");
+		const char *out = josh_extract(&ctx, json, "[0]");
 
 		ASSERT(ctx.len == 5);
 		ASSERT(out == json + 1);
 	}
 
 	TEST("error set if JSON string is never closed") {
-		static struct josh_ctx_t ctx;
 		const char *json = "[\"abc";
 
-		const char * out = josh_extract(&ctx, json, "[0]");
+		const char *out = josh_extract(&ctx, json, "[0]");
 
 		ASSERT(!out);
 		ASSERT(!ctx.len);
@@ -105,10 +99,9 @@ int main(void) {
 	}
 
 	TEST("error set if JSON number is invalid") {
-		static struct josh_ctx_t ctx;
 		const char *json = "[1x]";
 
-		const char * out = josh_extract(&ctx, json, "[0]");
+		const char *out = josh_extract(&ctx, json, "[0]");
 
 		ASSERT(!out);
 		ASSERT(!ctx.len);
@@ -120,9 +113,8 @@ int main(void) {
 
 	TEST("parse JSON true literal") {
 		const char *json = "[true]";
-		static struct josh_ctx_t ctx;
 
-		const char * out = josh_extract(&ctx, json, "[0]");
+		const char *out = josh_extract(&ctx, json, "[0]");
 
 		ASSERT(ctx.len == 4);
 		ASSERT(out == json + 1);
@@ -130,9 +122,8 @@ int main(void) {
 
 	TEST("parse JSON false literal") {
 		const char *json = "[false]";
-		static struct josh_ctx_t ctx;
 
-		const char * out = josh_extract(&ctx, json, "[0]");
+		const char *out = josh_extract(&ctx, json, "[0]");
 
 		ASSERT(ctx.len == 5);
 		ASSERT(out == json + 1);
@@ -140,9 +131,8 @@ int main(void) {
 
 	TEST("parse JSON null literal") {
 		const char *json = "[null]";
-		static struct josh_ctx_t ctx;
 
-		const char * out = josh_extract(&ctx, json, "[0]");
+		const char *out = josh_extract(&ctx, json, "[0]");
 
 		ASSERT(ctx.len == 4);
 		ASSERT(out == json + 1);
@@ -150,9 +140,8 @@ int main(void) {
 
 	TEST("set error when parsing unknown JSON literal") {
 		const char *json = "[xyz]";
-		static struct josh_ctx_t ctx;
 
-		const char * out = josh_extract(&ctx, json, "[0]");
+		const char *out = josh_extract(&ctx, json, "[0]");
 
 		ASSERT(!out);
 		ASSERT(!ctx.len);
@@ -164,9 +153,8 @@ int main(void) {
 
 	TEST("parse negative number") {
 		const char *json = "[-123]";
-		static struct josh_ctx_t ctx;
 
-		const char * out = josh_extract(&ctx, json, "[0]");
+		const char *out = josh_extract(&ctx, json, "[0]");
 
 		ASSERT(ctx.len == 4);
 		ASSERT(out == json + 1);
@@ -174,9 +162,8 @@ int main(void) {
 
 	TEST("set error when number contains multiple periods") {
 		const char *json = "[1.2.3]";
-		static struct josh_ctx_t ctx;
 
-		const char * out = josh_extract(&ctx, json, "[0]");
+		const char *out = josh_extract(&ctx, json, "[0]");
 
 		ASSERT(!out);
 		ASSERT(!ctx.len);
@@ -188,9 +175,8 @@ int main(void) {
 
 	TEST("set error when decimal doesnt have leading digit") {
 		const char *json = "[-.1]";
-		static struct josh_ctx_t ctx;
 
-		const char * out = josh_extract(&ctx, json, "[0]");
+		const char *out = josh_extract(&ctx, json, "[0]");
 
 		ASSERT(!out);
 		ASSERT(!ctx.len);
@@ -202,9 +188,8 @@ int main(void) {
 
 	TEST("set error when key number is invalid") {
 		const char *json = "[123]";
-		static struct josh_ctx_t ctx;
 
-		const char * out = josh_extract(&ctx, json, "[123xyz]");
+		const char *out = josh_extract(&ctx, json, "[123xyz]");
 
 		ASSERT(!out);
 		ASSERT(!ctx.len);
@@ -216,9 +201,8 @@ int main(void) {
 
 	TEST("set error when array index is not found") {
 		const char *json = "[]";
-		static struct josh_ctx_t ctx;
 
-		const char * out = josh_extract(&ctx, json, "[0]");
+		const char *out = josh_extract(&ctx, json, "[0]");
 
 		ASSERT(!out);
 		ASSERT(!ctx.len);
@@ -230,9 +214,8 @@ int main(void) {
 
 	TEST("set error when array index is not found") {
 		const char *json = "[]";
-		static struct josh_ctx_t ctx;
 
-		const char * out = josh_extract(&ctx, json, "[0]");
+		const char *out = josh_extract(&ctx, json, "[0]");
 
 		ASSERT(!out);
 		ASSERT(!ctx.len);
@@ -244,9 +227,8 @@ int main(void) {
 
 	TEST("parse nth key from array") {
 		const char *json = "[1, 2, 3]";
-		static struct josh_ctx_t ctx;
 
-		const char * out = josh_extract(&ctx, json, "[2]");
+		const char *out = josh_extract(&ctx, json, "[2]");
 
 		ASSERT(ctx.key == 2);
 		ASSERT(ctx.len == 1);
@@ -255,9 +237,8 @@ int main(void) {
 
 	TEST("parse nested array") {
 		const char *json = "[[1, 2, 3]]";
-		static struct josh_ctx_t ctx;
 
-		const char * out = josh_extract(&ctx, json, "[0]");
+		const char *out = josh_extract(&ctx, json, "[0]");
 
 		ASSERT(ctx.len == 9);
 		ASSERT(out == json + 1);
@@ -266,9 +247,8 @@ int main(void) {
 	TEST("parse string with escape chars") {
 		/* json = ["\" \\ \/ \b \f \n \r \t \u1234"] */
 		const char *json = "[\"\\\" \\\\ \\/ \\b \\f \\n \\r \\t \\u1234\"]";
-		static struct josh_ctx_t ctx;
 
-		const char * out = josh_extract(&ctx, json, "[0]");
+		const char *out = josh_extract(&ctx, json, "[0]");
 
 		ASSERT(ctx.len == 32);
 		ASSERT(out == json + 1);
@@ -276,9 +256,8 @@ int main(void) {
 
 	TEST("set error when invalid escape char is found") {
 		const char *json = "[\"\\z\"]";
-		static struct josh_ctx_t ctx;
 
-		const char * out = josh_extract(&ctx, json, "[0]");
+		const char *out = josh_extract(&ctx, json, "[0]");
 
 		ASSERT(!out);
 		ASSERT(!ctx.len);
@@ -290,9 +269,8 @@ int main(void) {
 
 	TEST("set error when invalid unicode escape is found") {
 		const char *json = "[\"\\u123x\"]";
-		static struct josh_ctx_t ctx;
 
-		const char * out = josh_extract(&ctx, json, "[0]");
+		const char *out = josh_extract(&ctx, json, "[0]");
 
 		ASSERT(!out);
 		ASSERT(!ctx.len);
@@ -304,9 +282,8 @@ int main(void) {
 
 	TEST("set error for invalid object key") {
 		const char *json = "";
-		static struct josh_ctx_t ctx;
 
-		const char * out = josh_extract(&ctx, json, ".");
+		const char *out = josh_extract(&ctx, json, ".");
 
 		ASSERT(!out);
 		ASSERT(!ctx.len);
@@ -318,7 +295,6 @@ int main(void) {
 
 	TEST("parse object key") {
 		const char *json = "{}";
-		static struct josh_ctx_t ctx;
 
 		josh_extract(&ctx, json, ".abc");
 
@@ -328,9 +304,8 @@ int main(void) {
 
 	TEST("parse empty object") {
 		const char *json = "[{}]";
-		static struct josh_ctx_t ctx;
 
-		const char * out = josh_extract(&ctx, json, "[0]");
+		const char *out = josh_extract(&ctx, json, "[0]");
 
 		ASSERT(ctx.len == 2);
 		ASSERT(out == json + 1);
@@ -338,9 +313,8 @@ int main(void) {
 
 	TEST("parse object with key") {
 		const char *json = "[{\"abc\": 123}]";
-		static struct josh_ctx_t ctx;
 
-		const char * out = josh_extract(&ctx, json, "[0]");
+		const char *out = josh_extract(&ctx, json, "[0]");
 
 		ASSERT(ctx.len == 12);
 		ASSERT(out == json + 1);
@@ -348,9 +322,8 @@ int main(void) {
 
 	TEST("parse object with multiple keys") {
 		const char *json = "[{\"abc\": 123, \"def\": 456}]";
-		static struct josh_ctx_t ctx;
 
-		const char * out = josh_extract(&ctx, json, "[0]");
+		const char *out = josh_extract(&ctx, json, "[0]");
 
 		ASSERT(ctx.len == 24);
 		ASSERT(out == json + 1);
@@ -358,9 +331,8 @@ int main(void) {
 
 	TEST("parse object using object key") {
 		const char *json = "{\"abc\": 123, \"def\": 456}";
-		static struct josh_ctx_t ctx;
 
-		const char * out = josh_extract(&ctx, json, ".def");
+		const char *out = josh_extract(&ctx, json, ".def");
 
 		ASSERT(ctx.len == 3);
 		ASSERT(out == json + 20);
@@ -368,9 +340,8 @@ int main(void) {
 
 	TEST("set error for object key missing colon") {
 		const char *json = "{\"abc\" 123}";
-		static struct josh_ctx_t ctx;
 
-		const char * out = josh_extract(&ctx, json, ".abc");
+		const char *out = josh_extract(&ctx, json, ".abc");
 
 		ASSERT(!out);
 		ASSERT(!ctx.len);
@@ -382,9 +353,8 @@ int main(void) {
 
 	TEST("set error for object key using non-string key") {
 		const char *json = "{123}";
-		static struct josh_ctx_t ctx;
 
-		const char * out = josh_extract(&ctx, json, ".abc");
+		const char *out = josh_extract(&ctx, json, ".abc");
 
 		ASSERT(!out);
 		ASSERT(!ctx.len);
@@ -396,9 +366,8 @@ int main(void) {
 
 	TEST("set error for non existent object key") {
 		const char *json = "{}";
-		static struct josh_ctx_t ctx;
 
-		const char * out = josh_extract(&ctx, json, ".abc");
+		const char *out = josh_extract(&ctx, json, ".abc");
 
 		ASSERT(!out);
 		ASSERT(!ctx.len);
@@ -410,9 +379,8 @@ int main(void) {
 
 	TEST("parse numbers with exponents") {
 		const char *json = "[[1e3, 1E3, 1.2e3, 1.2E3, 1e+3, 1e-3]]";
-		static struct josh_ctx_t ctx;
 
-		const char * out = josh_extract(&ctx, json, "[0]");
+		const char *out = josh_extract(&ctx, json, "[0]");
 
 		ASSERT(ctx.len == 36);
 		ASSERT(out == json + 1);
@@ -420,9 +388,8 @@ int main(void) {
 
 	TEST("set error for number with leading zero") {
 		const char *json = "[0123]";
-		static struct josh_ctx_t ctx;
 
-		const char * out = josh_extract(&ctx, json, "[0]");
+		const char *out = josh_extract(&ctx, json, "[0]");
 
 		ASSERT(!out);
 		ASSERT(!ctx.len);
@@ -434,9 +401,8 @@ int main(void) {
 
 	TEST("set error with column and line info set") {
 		const char *json = "[\n  x]";
-		static struct josh_ctx_t ctx;
 
-		const char * out = josh_extract(&ctx, json, "[0]");
+		const char *out = josh_extract(&ctx, json, "[0]");
 
 		ASSERT(!out);
 		ASSERT(!ctx.len);
@@ -447,9 +413,8 @@ int main(void) {
 
 	TEST("parse string in array as dictionary key") {
 		const char *json = "{\"abc\": 123}";
-		static struct josh_ctx_t ctx;
 
-		const char * out = josh_extract(&ctx, json, "[\"abc\"]");
+		const char *out = josh_extract(&ctx, json, "[\"abc\"]");
 
 		ASSERT(ctx.len == 3);
 		ASSERT(out == json + 8);
