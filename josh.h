@@ -304,11 +304,28 @@ bool josh_parse_key(struct josh_ctx_t *ctx, const char *key) {
 		}
 	}
 	else if (key[0] == '.') {
-		// TODO: validate dot notation uses valid JS identifier
 		if (len <= 1) {
 			JOSH_ERROR(ctx, JOSH_ERROR_INVALID_KEY_OBJECT);
 
 			return false;
+		}
+
+		for (unsigned i = 1; i < len; i++) {
+			const char c = key[i];
+
+			if (
+				c == '_' ||
+				(c >= 'A' && c <= 'Z') ||
+				(c >= 'a' && c <= 'z') ||
+				(c >= '0' && c <= '9')
+			) {
+				// do nothing
+			}
+			else {
+				JOSH_ERROR(ctx, JOSH_ERROR_INVALID_KEY_OBJECT);
+
+				return false;
+			}
 		}
 
 		ctx->key_str = key + 1;

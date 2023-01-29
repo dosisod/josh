@@ -419,4 +419,15 @@ int main(void) {
 		ASSERT(ctx.len == 3);
 		ASSERT(out == json + 8);
 	}
+
+	TEST("error set if using dot notation with invalid JS literal") {
+		const char *out = josh_extract(&ctx, "{}", ".not_valid!");
+
+		ASSERT(!out);
+		ASSERT(!ctx.len);
+		ASSERT(ctx.error_id == JOSH_ERROR_INVALID_KEY_OBJECT);
+		ASSERT(ctx.line == 1);
+		ASSERT(ctx.column == 1);
+		ASSERT(ctx.offset == 0);
+	}
 }
