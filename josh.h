@@ -2,6 +2,13 @@
 #include <stdbool.h>
 #include <string.h>
 
+// Defines how many layers deep the key parser can parse. This does not define
+// how many layers the JSON parser itself can parse, merely how many layers
+// of key values need to be stored in memory.
+#ifndef JOSH_CONFIG_MAX_DEPTH
+#define JOSH_CONFIG_MAX_DEPTH 16
+#endif
+
 enum josh_error {
 	JOSH_ERROR_NONE,
 	JOSH_ERROR_EXPECTED_ARRAY,
@@ -13,7 +20,9 @@ enum josh_error {
 	JOSH_ERROR_EXPECTED_FALSE,
 	JOSH_ERROR_EXPECTED_NULL,
 	JOSH_ERROR_EXPECTED_LITERAL,
-	JOSH_ERROR_EXPECTED_KEY_ARRAY,
+	JOSH_ERROR_EXPECTED_KEY_CLOSING_BRACKET,
+	JOSH_ERROR_EXPECTED_KEY_CLOSING_QUOTE,
+	JOSH_ERROR_EXPECTED_KEY_VALUE,
 	JOSH_ERROR_KEY_NUMBER_INVALID,
 	JOSH_ERROR_ARRAY_INDEX_NOT_FOUND,
 	JOSH_ERROR_OBJECT_KEY_NOT_FOUND,
@@ -30,6 +39,14 @@ enum josh_key_type_t {
 	JOSH_KEY_TYPE_OBJECT,
 };
 
+struct josh_key_t {
+	enum josh_key_type_t type;
+	union {
+		unsigned num;
+		const char *str;
+	} key;
+};
+
 struct josh_ctx_t {
 	const char *start;
 	const char *ptr;
@@ -39,10 +56,8 @@ struct josh_ctx_t {
 	unsigned offset;
 	unsigned column;
 
-	// subject to change
-	unsigned key;
-	const char *key_str;
-	enum josh_key_type_t key_type;
+	struct josh_key_t keys[JOSH_CONFIG_MAX_DEPTH];
+	unsigned key_count;
 
 	unsigned current_index;
 	const char *current_index_str;
@@ -130,7 +145,11 @@ bool josh_iter_value(struct josh_ctx_t *ctx) {
 }
 
 const char *josh_iter_array(struct josh_ctx_t *ctx) {
-	if (!ctx->found_key && ctx->key_type == JOSH_KEY_TYPE_ARRAY && *ctx->ptr != '[') {
+	if (
+		!ctx->found_key &&
+		ctx->keys[ctx->current_level].type == JOSH_KEY_TYPE_ARRAY &&
+		*ctx->ptr != '['
+	) {
 		JOSH_ERROR(ctx, JOSH_ERROR_EXPECTED_ARRAY);
 
 		return NULL;
@@ -157,9 +176,9 @@ const char *josh_iter_array(struct josh_ctx_t *ctx) {
 		}
 
 		if (
-			ctx->key_type == JOSH_KEY_TYPE_ARRAY &&
-			ctx->key == ctx->current_index &&
-			ctx->current_level == 0
+			(ctx->current_level == ctx->key_count - 1) &&
+			ctx->keys[ctx->current_level].type == JOSH_KEY_TYPE_ARRAY &&
+			ctx->keys[ctx->current_level].key.num == ctx->current_index
 		) {
 			ctx->found_key = true;
 			found_key = true;
@@ -184,7 +203,11 @@ const char *josh_iter_array(struct josh_ctx_t *ctx) {
 
 const char *josh_iter_object(struct josh_ctx_t *ctx) {
 	// TODO: test this
-	if (!ctx->found_key && ctx->key_type == JOSH_KEY_TYPE_OBJECT && *ctx->ptr != '{') {
+	if (
+		!ctx->found_key &&
+		ctx->keys[0].type == JOSH_KEY_TYPE_OBJECT &&
+		*ctx->ptr != '{'
+	) {
 		JOSH_ERROR(ctx, JOSH_ERROR_EXPECTED_OBJECT);
 
 		return NULL;
@@ -232,13 +255,13 @@ const char *josh_iter_object(struct josh_ctx_t *ctx) {
 		josh_iter_whitespace(ctx);
 
 		if (
-			ctx->key_type == JOSH_KEY_TYPE_OBJECT &&
+			(ctx->current_level == ctx->key_count - 1) &&
+			ctx->keys[ctx->current_level].type == JOSH_KEY_TYPE_OBJECT &&
 			strncmp(
-				ctx->key_str,
+				ctx->keys[ctx->current_level].key.str,
 				string_start_pos,
 				(unsigned)(string_end_pos - string_start_pos)
-			) == 0 &&
-			ctx->current_level == 0
+			) == 0
 		) {
 			ctx->found_key = true;
 			found_key = true;
@@ -258,78 +281,112 @@ const char *josh_iter_object(struct josh_ctx_t *ctx) {
 	return value_pos;
 }
 
+static inline bool josh_is_key_terminator(char c) {
+	return c == ']' || c == '.';
+}
+
 bool josh_parse_key(struct josh_ctx_t *ctx, const char *key) {
 	// Parse the JSON extraction schema (the key) into a codified format. Returns
 	// false if an error occurs.
 
-	const size_t len = strlen(key);
+	while (*key) {
+		if (*key == '[') {
+			if (isdigit(key[1])) {
+				unsigned index = 0;
+				key++;
 
-	if (key[0] == '[') {
-		if (key[len - 1] != ']') {
-			JOSH_ERROR(ctx, JOSH_ERROR_EXPECTED_KEY_ARRAY);
+				for (;;) {
+					const char num = *key++;
 
-			return false;
-		}
+					if (josh_is_key_terminator(num)) {
+						break;
+					}
 
-		if (isdigit(key[1])) {
-			unsigned index = 0;
+					if (!num) {
+						JOSH_ERROR(ctx, JOSH_ERROR_EXPECTED_KEY_CLOSING_BRACKET);
 
-			for (unsigned i = 1; i < len - 1; i++) {
-				const char num = key[i];
+						return false;
+					}
 
-				if (num < '0' || num > '9') {
-					JOSH_ERROR(ctx, JOSH_ERROR_KEY_NUMBER_INVALID);
+					if (num < '0' || num > '9') {
+						JOSH_ERROR(ctx, JOSH_ERROR_KEY_NUMBER_INVALID);
+
+						return false;
+					}
+
+					index = (index * 10) + ((unsigned)num - '0');
+				}
+
+				ctx->keys[ctx->key_count].key.num = index;
+				ctx->keys[ctx->key_count].type = JOSH_KEY_TYPE_ARRAY;
+				ctx->key_count++;
+			}
+			else if (key[1] == '\"') {
+				// TODO: make a copy of this string. Currently we just take a
+				// pointer to the key, which means that it will not be null
+				// terminated. This shouldn't be an issue because a string
+				// cannot be matched to quote ('"'), as it must be escaped.
+				// Still, this hackery should be averted if possible.
+				ctx->keys[ctx->key_count].key.str = key + 2;
+				ctx->keys[ctx->key_count].type = JOSH_KEY_TYPE_OBJECT;
+				ctx->key_count++;
+
+				key += 2;
+
+				while (*key && *key != '\"') key++;
+
+				if (!*key++) {
+					JOSH_ERROR(ctx, JOSH_ERROR_EXPECTED_KEY_CLOSING_QUOTE);
 
 					return false;
 				}
 
-				index = (index * 10) + ((unsigned)num - '0');
-			}
+				if (*key++ != ']') {
+					JOSH_ERROR(ctx, JOSH_ERROR_EXPECTED_KEY_CLOSING_BRACKET);
 
-			ctx->key = index;
-			ctx->key_type = JOSH_KEY_TYPE_ARRAY;
-		}
-		else if (key[1] == '\"') {
-			// TODO: check that the last char is '"'
-			// TODO: make a copy of this string. Currently we just take a
-			// pointer to the key, which means that it will not be null
-			// terminated. This shouldn't be an issue because a string
-			// cannot be matched to quote ('"'), as it must be escaped.
-			// Still, this hackery should be averted if possible.
-			ctx->key_str = key + 2;
-			ctx->key_type = JOSH_KEY_TYPE_OBJECT;
-		}
-		else {
-			// TODO: throw error
-		}
-	}
-	else if (key[0] == '.') {
-		if (len <= 1) {
-			JOSH_ERROR(ctx, JOSH_ERROR_INVALID_KEY_OBJECT);
-
-			return false;
-		}
-
-		for (unsigned i = 1; i < len; i++) {
-			const char c = key[i];
-
-			if (
-				c == '_' ||
-				(c >= 'A' && c <= 'Z') ||
-				(c >= 'a' && c <= 'z') ||
-				(c >= '0' && c <= '9')
-			) {
-				// do nothing
+					return false;
+				}
 			}
 			else {
-				JOSH_ERROR(ctx, JOSH_ERROR_INVALID_KEY_OBJECT);
+				JOSH_ERROR(ctx, JOSH_ERROR_EXPECTED_KEY_VALUE);
 
 				return false;
 			}
 		}
+		else if (*key == '.') {
+			if (!key[1]) {
+				JOSH_ERROR(ctx, JOSH_ERROR_INVALID_KEY_OBJECT);
 
-		ctx->key_str = key + 1;
-		ctx->key_type = JOSH_KEY_TYPE_OBJECT;
+				return false;
+			}
+
+			const char *start = key + 1;
+			char c = *++key;
+
+			while ((c = *++key)) {
+				if (
+					c == '_' ||
+					(c >= 'A' && c <= 'Z') ||
+					(c >= 'a' && c <= 'z') ||
+					(c >= '0' && c <= '9')
+				) {
+					continue;
+				}
+
+				JOSH_ERROR(ctx, JOSH_ERROR_INVALID_KEY_OBJECT);
+
+				return false;
+			}
+
+			ctx->keys[ctx->key_count].key.str = start;
+			ctx->keys[ctx->key_count].type = JOSH_KEY_TYPE_OBJECT;
+			ctx->key_count++;
+		}
+		else {
+			// should be impossible
+
+			return false;
+		}
 	}
 
 	return true;

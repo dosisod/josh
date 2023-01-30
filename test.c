@@ -230,7 +230,10 @@ int main(void) {
 
 		const char *out = josh_extract(&ctx, json, "[2]");
 
-		ASSERT(ctx.key == 2);
+		ASSERT(!ctx.error_id);
+		ASSERT(ctx.key_count == 1);
+		ASSERT(ctx.keys[0].type == JOSH_KEY_TYPE_ARRAY);
+		ASSERT(ctx.keys[0].key.num == 2);
 		ASSERT(ctx.len == 1);
 		ASSERT(out == json + 7);
 	}
@@ -294,12 +297,15 @@ int main(void) {
 	}
 
 	TEST("parse object key") {
-		const char *json = "{}";
+		memset(&ctx, 0, sizeof ctx);
+		const bool ok = josh_parse_key(&ctx, ".abc");
 
-		josh_extract(&ctx, json, ".abc");
-
-		ASSERT(ctx.key_str);
-		ASSERT(strcmp(ctx.key_str, "abc") == 0);
+		ASSERT(ok);
+		ASSERT(!ctx.error_id);
+		ASSERT(ctx.key_count == 1);
+		ASSERT(ctx.keys[0].type == JOSH_KEY_TYPE_OBJECT);
+		ASSERT(ctx.keys[0].key.str);
+		ASSERT(strcmp(ctx.keys[0].key.str, "abc") == 0);
 	}
 
 	TEST("parse empty object") {
@@ -429,5 +435,55 @@ int main(void) {
 		ASSERT(ctx.line == 1);
 		ASSERT(ctx.column == 1);
 		ASSERT(ctx.offset == 0);
+	}
+
+	TEST("parse nested key") {
+		memset(&ctx, 0, sizeof ctx);
+
+		const bool ok = josh_parse_key(&ctx, "[1][2]");
+
+		ASSERT(ok);
+		ASSERT(!ctx.error_id);
+		ASSERT(ctx.key_count == 2);
+		ASSERT(ctx.keys[0].type == JOSH_KEY_TYPE_ARRAY);
+		ASSERT(ctx.keys[0].key.num == 1);
+		ASSERT(ctx.keys[1].type == JOSH_KEY_TYPE_ARRAY);
+		ASSERT(ctx.keys[1].key.num == 2);
+	}
+
+	TEST("set error for key missing value") {
+		memset(&ctx, 0, sizeof ctx);
+
+		const bool ok = josh_parse_key(&ctx, "[");
+
+		ASSERT(!ok);
+		ASSERT(ctx.error_id == JOSH_ERROR_EXPECTED_KEY_VALUE);
+	}
+
+	TEST("set error for number key missing closing square bracket") {
+		memset(&ctx, 0, sizeof ctx);
+
+		const bool ok = josh_parse_key(&ctx, "[1");
+
+		ASSERT(!ok);
+		ASSERT(ctx.error_id == JOSH_ERROR_EXPECTED_KEY_CLOSING_BRACKET);
+	}
+
+	TEST("set error for string key missing closing square bracket") {
+		memset(&ctx, 0, sizeof ctx);
+
+		const bool ok = josh_parse_key(&ctx, "[\"abc\"");
+
+		ASSERT(!ok);
+		ASSERT(ctx.error_id == JOSH_ERROR_EXPECTED_KEY_CLOSING_BRACKET);
+	}
+
+	TEST("set error for string key missing closing quote") {
+		memset(&ctx, 0, sizeof ctx);
+
+		const bool ok = josh_parse_key(&ctx, "[\"abc");
+
+		ASSERT(!ok);
+		ASSERT(ctx.error_id == JOSH_ERROR_EXPECTED_KEY_CLOSING_QUOTE);
 	}
 }
