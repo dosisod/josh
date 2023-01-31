@@ -10,8 +10,12 @@ jobs:
   tests:
     runs-on: ubuntu-latest
 
+    strategy:
+      matrix:
+        CC: [gcc, clang]
+
     steps:
       - uses: actions/checkout@v3
 
       - name: Run tests
-        run: make test
+        run: CC=${{ matrix.CC }} make test
