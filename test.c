@@ -486,4 +486,46 @@ int main(void) {
 		ASSERT(!ok);
 		ASSERT(ctx.error_id == JOSH_ERROR_EXPECTED_KEY_CLOSING_QUOTE);
 	}
+
+	TEST("extract nested value from array") {
+		const char *json = "[[1, 2, 3]]";
+
+		const char *out = josh_extract(&ctx, json, "[0][0]");
+
+		ASSERT(ctx.len == 1);
+		ASSERT(out == json + 2);
+	}
+
+	TEST("extract nested value from object") {
+		const char *json = "{\"a\": {\"b\": 1, \"c\": 2}}";
+
+		const char *out = josh_extract(&ctx, json, ".a.b");
+
+		ASSERT(ctx.len == 1);
+		ASSERT(out == json + 12);
+	}
+
+	TEST("parse key with nested dot notation") {
+		memset(&ctx, 0, sizeof ctx);
+		const bool ok = josh_parse_key(&ctx, ".a.b");
+
+		ASSERT(ok);
+		ASSERT(!ctx.error_id);
+		ASSERT(ctx.key_count == 2);
+		ASSERT(ctx.keys[0].type == JOSH_KEY_TYPE_OBJECT);
+		ASSERT(ctx.keys[0].key.str);
+		// TODO: use strcmp once strings are copied to context
+		ASSERT(strncmp(ctx.keys[0].key.str, "a", 1) == 0);
+		ASSERT(ctx.keys[1].type == JOSH_KEY_TYPE_OBJECT);
+		ASSERT(ctx.keys[1].key.str);
+		ASSERT(strncmp(ctx.keys[1].key.str, "b", 1) == 0);
+	}
+
+	TEST("set error if key max depth is reached") {
+		memset(&ctx, 0, sizeof ctx);
+		const bool ok = josh_parse_key(&ctx, "[1][2][3][4][5][6][7][8][9][10][11][12][13][14][15][16][17]");
+
+		ASSERT(!ok);
+		ASSERT(ctx.error_id == JOSH_ERROR_KEY_MAX_DEPTH_REACHED);
+	}
 }

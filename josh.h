@@ -32,6 +32,7 @@ enum josh_error {
 	JOSH_ERROR_EXPECTED_STRING,
 	JOSH_ERROR_EXPECTED_COLON,
 	JOSH_ERROR_NO_LEADING_ZERO,
+	JOSH_ERROR_KEY_MAX_DEPTH_REACHED,
 };
 
 enum josh_key_type_t {
@@ -63,6 +64,7 @@ struct josh_ctx_t {
 	const char *current_index_str;
 	unsigned current_level;
 	bool found_key;
+	const char *value_pos;
 };
 
 static inline bool josh_is_value_terminator(char c) {
@@ -71,8 +73,8 @@ static inline bool josh_is_value_terminator(char c) {
 
 bool josh_parse_key(struct josh_ctx_t *ctx, const char *key);
 bool josh_iter_value(struct josh_ctx_t *ctx);
-const char *josh_iter_array(struct josh_ctx_t *ctx);
-const char *josh_iter_object(struct josh_ctx_t *ctx);
+bool josh_iter_array(struct josh_ctx_t *ctx);
+bool josh_iter_object(struct josh_ctx_t *ctx);
 bool josh_iter_string(struct josh_ctx_t *ctx);
 bool josh_iter_number(struct josh_ctx_t *ctx);
 bool josh_iter_literal(struct josh_ctx_t *ctx);
@@ -100,10 +102,13 @@ const char *josh_extract(struct josh_ctx_t *ctx, const char *json, const char *k
 	josh_iter_whitespace(ctx);
 
 	if (*ctx->ptr == '{') {
-		return josh_iter_object(ctx);
+		if (josh_iter_object(ctx)) return ctx->value_pos;
+	}
+	else if (josh_iter_array(ctx)) {
+		return ctx->value_pos;
 	}
 
-	return josh_iter_array(ctx);
+	return NULL;
 }
 
 bool josh_iter_value(struct josh_ctx_t *ctx) {
@@ -144,7 +149,10 @@ bool josh_iter_value(struct josh_ctx_t *ctx) {
 	return true;
 }
 
-const char *josh_iter_array(struct josh_ctx_t *ctx) {
+bool josh_iter_array(struct josh_ctx_t *ctx) {
+	// Iterate until the end of an array, exiting early if the index indicated
+	// by `ctx->keys` is found. Return true upon success, or false on error.
+
 	if (
 		!ctx->found_key &&
 		ctx->keys[ctx->current_level].type == JOSH_KEY_TYPE_ARRAY &&
@@ -152,27 +160,24 @@ const char *josh_iter_array(struct josh_ctx_t *ctx) {
 	) {
 		JOSH_ERROR(ctx, JOSH_ERROR_EXPECTED_ARRAY);
 
-		return NULL;
+		return false;
 	}
 
 	josh_step_char(ctx);
 	josh_iter_whitespace(ctx);
-
-	const char *value_pos = ctx->ptr;
-	bool found_key = false;
 
 	for (;;) {
 		if (*ctx->ptr == ']') {
 			if (ctx->found_key) {
 				josh_step_char(ctx);
 
-				return value_pos;
+				return true;
 			}
 
 			// TODO: throw error if "]" comes after ","
 			JOSH_ERROR(ctx, JOSH_ERROR_ARRAY_INDEX_NOT_FOUND);
 
-			return NULL;
+			return false;
 		}
 
 		if (
@@ -181,13 +186,12 @@ const char *josh_iter_array(struct josh_ctx_t *ctx) {
 			ctx->keys[ctx->current_level].key.num == ctx->current_index
 		) {
 			ctx->found_key = true;
-			found_key = true;
-			value_pos = ctx->ptr;
+			ctx->value_pos = ctx->ptr;
 		}
 
-		if (!josh_iter_value(ctx)) return NULL;
+		if (!josh_iter_value(ctx)) return false;
 
-		if (found_key) break;
+		if (ctx->found_key && ctx->current_level < ctx->key_count) break;
 
 		josh_iter_whitespace(ctx);
 
@@ -198,39 +202,39 @@ const char *josh_iter_array(struct josh_ctx_t *ctx) {
 		}
 	}
 
-	return value_pos;
+	return true;
 }
 
-const char *josh_iter_object(struct josh_ctx_t *ctx) {
-	// TODO: test this
+bool josh_iter_object(struct josh_ctx_t *ctx) {
+	// Iterate until the end of an object, exiting early if the key indicated
+	// by `ctx->keys` is found. Return true upon success, or false on error.
+
 	if (
 		!ctx->found_key &&
 		ctx->keys[0].type == JOSH_KEY_TYPE_OBJECT &&
 		*ctx->ptr != '{'
 	) {
+		// TODO: test this
 		JOSH_ERROR(ctx, JOSH_ERROR_EXPECTED_OBJECT);
 
-		return NULL;
+		return false;
 	}
 
 	josh_step_char(ctx);
 	josh_iter_whitespace(ctx);
-
-	const char *value_pos = ctx->ptr;
-	bool found_key = false;
 
 	for (;;) {
 		if (*ctx->ptr == '}') {
 			if (ctx->found_key) {
 				josh_step_char(ctx);
 
-				return value_pos;
+				return true;
 			}
 
 			// TODO: throw error if "}" comes after ","
 			JOSH_ERROR(ctx, JOSH_ERROR_OBJECT_KEY_NOT_FOUND);
 
-			return NULL;
+			return false;
 		}
 
 		const char *string_start_pos = ctx->ptr + 1;
@@ -238,7 +242,7 @@ const char *josh_iter_object(struct josh_ctx_t *ctx) {
 		if (*ctx->ptr != '\"' || !josh_iter_string(ctx)) {
 			JOSH_ERROR(ctx, JOSH_ERROR_EXPECTED_STRING);
 
-			return NULL;
+			return false;
 		}
 
 		const char *string_end_pos = ctx->ptr - 1;
@@ -248,7 +252,7 @@ const char *josh_iter_object(struct josh_ctx_t *ctx) {
 		if (*ctx->ptr != ':') {
 			JOSH_ERROR(ctx, JOSH_ERROR_EXPECTED_COLON);
 
-			return NULL;
+			return false;
 		}
 
 		josh_step_char(ctx);
@@ -264,13 +268,12 @@ const char *josh_iter_object(struct josh_ctx_t *ctx) {
 			) == 0
 		) {
 			ctx->found_key = true;
-			found_key = true;
-			value_pos = ctx->ptr;
+			ctx->value_pos = ctx->ptr;
 		}
 
-		if (!josh_iter_value(ctx)) return NULL;
+		if (!josh_iter_value(ctx)) return false;
 
-		if (found_key) break;
+		if (ctx->found_key && ctx->current_level < ctx->key_count) break;
 
 		if (*ctx->ptr == ',') {
 			josh_step_char(ctx);
@@ -278,7 +281,7 @@ const char *josh_iter_object(struct josh_ctx_t *ctx) {
 		}
 	}
 
-	return value_pos;
+	return true;
 }
 
 static inline bool josh_is_key_terminator(char c) {
@@ -290,6 +293,12 @@ bool josh_parse_key(struct josh_ctx_t *ctx, const char *key) {
 	// false if an error occurs.
 
 	while (*key) {
+		if (ctx->key_count >= JOSH_CONFIG_MAX_DEPTH) {
+			JOSH_ERROR(ctx, JOSH_ERROR_KEY_MAX_DEPTH_REACHED);
+
+			return false;
+		}
+
 		if (*key == '[') {
 			if (isdigit(key[1])) {
 				unsigned index = 0;
@@ -361,9 +370,9 @@ bool josh_parse_key(struct josh_ctx_t *ctx, const char *key) {
 			}
 
 			const char *start = key + 1;
-			char c = *++key;
+			char c = *(++key);
 
-			while ((c = *++key)) {
+			while ((c = *(++key))) {
 				if (
 					c == '_' ||
 					(c >= 'A' && c <= 'Z') ||
@@ -372,6 +381,8 @@ bool josh_parse_key(struct josh_ctx_t *ctx, const char *key) {
 				) {
 					continue;
 				}
+
+				if (josh_is_key_terminator(c)) break;
 
 				JOSH_ERROR(ctx, JOSH_ERROR_INVALID_KEY_OBJECT);
 

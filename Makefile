@@ -34,7 +34,10 @@ CFLAGS = -std=c99 \
 	-Wcast-qual \
 	-Wstack-protector \
 	-Wunused-function \
-	-g
+	-g \
+	-fsanitize=address \
+	-fsanitize=leak \
+	-fsanitize=undefined
 
 test: josh.h test.c
 	$(CC) $(CFLAGS) test.c -o test
