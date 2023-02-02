@@ -34,6 +34,7 @@ CFLAGS = -std=c99 \
 	-Wcast-qual \
 	-Wstack-protector \
 	-Wunused-function \
+	-Wno-pointer-arith \
 	-g \
 	-fsanitize=address \
 	-fsanitize=leak \

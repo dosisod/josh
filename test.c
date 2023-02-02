@@ -528,4 +528,40 @@ int main(void) {
 		ASSERT(!ok);
 		ASSERT(ctx.error_id == JOSH_ERROR_KEY_MAX_DEPTH_REACHED);
 	}
+
+	TEST("allocate memory increments counter") {
+		memset(&ctx, 0, sizeof ctx);
+
+		void *memory = josh_malloc(&ctx, 1);
+
+		ASSERT(memory);
+		ASSERT(ctx.allocated == 1);
+
+		void *memory2 = josh_malloc(&ctx, 2);
+
+		ASSERT(memory2);
+		ASSERT(memory2 == memory + 1);
+		ASSERT(ctx.allocated == 3);
+	}
+
+	TEST("set error if allocating more them max memory") {
+		memset(&ctx, 0, sizeof ctx);
+
+		void *mem = josh_malloc(&ctx, JOSH_CONFIG_MAX_MEMORY + 1);
+
+		ASSERT(!mem);
+		ASSERT(ctx.error_id == JOSH_ERROR_OUT_OF_MEMORY);
+	}
+
+	TEST("string keys are properly compared") {
+		const char *json = "{\"a\": 1}";
+
+		const char *out = josh_extract(&ctx, json, "[\"abc\"]");
+
+		ASSERT(!out);
+
+		out = josh_extract(&ctx, json, ".abc");
+
+		ASSERT(!out);
+	}
 }

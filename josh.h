@@ -1,5 +1,6 @@
 #include <ctype.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <string.h>
 
 // Defines how many layers deep the key parser can parse. This does not define
@@ -7,6 +8,15 @@
 // of key values need to be stored in memory.
 #ifndef JOSH_CONFIG_MAX_DEPTH
 #define JOSH_CONFIG_MAX_DEPTH 16
+#endif
+
+// Defines how big of a memory pool Josh should allocate (on the stack). This
+// is not the size of the Josh context itself, but the memory portion of the
+// context. This memory section is mostly used for constructing JSON trees, not
+// for doing extractions. Depending on how big your JSON data is, you might
+// need to increase this value. Size is specified in bytes.
+#ifndef JOSH_CONFIG_MAX_MEMORY
+#define JOSH_CONFIG_MAX_MEMORY (1024 * 1024 * 8) // 8MB
 #endif
 
 enum josh_error {
@@ -33,6 +43,7 @@ enum josh_error {
 	JOSH_ERROR_EXPECTED_COLON,
 	JOSH_ERROR_NO_LEADING_ZERO,
 	JOSH_ERROR_KEY_MAX_DEPTH_REACHED,
+	JOSH_ERROR_OUT_OF_MEMORY,
 };
 
 enum josh_key_type_t {
@@ -61,10 +72,12 @@ struct josh_ctx_t {
 	unsigned key_count;
 
 	unsigned current_index;
-	const char *current_index_str;
 	unsigned current_level;
 	bool found_key;
 	const char *value_pos;
+
+	size_t allocated;
+	uint8_t memory[JOSH_CONFIG_MAX_MEMORY];
 };
 
 static inline bool josh_is_value_terminator(char c) {
@@ -80,6 +93,7 @@ bool josh_iter_number(struct josh_ctx_t *ctx);
 bool josh_iter_literal(struct josh_ctx_t *ctx);
 static inline void josh_iter_whitespace(struct josh_ctx_t *ctx);
 static inline char josh_step_char(struct josh_ctx_t *ctx);
+void *josh_malloc(struct josh_ctx_t *ctx, size_t bytes);
 
 #define JOSH_ERROR(ctx, id) \
 	(ctx)->error_id = (id); \
@@ -130,14 +144,11 @@ bool josh_iter_value(struct josh_ctx_t *ctx) {
 		ctx->current_index = temp;
 	}
 	else if (c == '{') {
-		const char *temp = ctx->current_index_str;
-		ctx->current_index_str = NULL;
 		ctx->current_level++;
 
 		if (!josh_iter_object(ctx)) return false;
 
 		ctx->current_level--;
-		ctx->current_index_str = temp;
 	}
 	else if (isdigit(c) || c == '-') {
 		if (!josh_iter_number(ctx)) return false;
@@ -237,15 +248,13 @@ bool josh_iter_object(struct josh_ctx_t *ctx) {
 			return false;
 		}
 
-		const char *string_start_pos = ctx->ptr + 1;
+		const char *key = ctx->ptr + 1;
 
 		if (*ctx->ptr != '\"' || !josh_iter_string(ctx)) {
 			JOSH_ERROR(ctx, JOSH_ERROR_EXPECTED_STRING);
 
 			return false;
 		}
-
-		const char *string_end_pos = ctx->ptr - 1;
 
 		josh_iter_whitespace(ctx);
 
@@ -263,8 +272,9 @@ bool josh_iter_object(struct josh_ctx_t *ctx) {
 			ctx->keys[ctx->current_level].type == JOSH_KEY_TYPE_OBJECT &&
 			strncmp(
 				ctx->keys[ctx->current_level].key.str,
-				string_start_pos,
-				(unsigned)(string_end_pos - string_start_pos)
+				key,
+				// TODO: dont recalculate key length for same level
+				strlen(ctx->keys[ctx->current_level].key.str)
 			) == 0
 		) {
 			ctx->found_key = true;
@@ -331,30 +341,31 @@ bool josh_parse_key(struct josh_ctx_t *ctx, const char *key) {
 				ctx->key_count++;
 			}
 			else if (key[1] == '\"') {
-				// TODO: make a copy of this string. Currently we just take a
-				// pointer to the key, which means that it will not be null
-				// terminated. This shouldn't be an issue because a string
-				// cannot be matched to quote ('"'), as it must be escaped.
-				// Still, this hackery should be averted if possible.
-				ctx->keys[ctx->key_count].key.str = key + 2;
-				ctx->keys[ctx->key_count].type = JOSH_KEY_TYPE_OBJECT;
-				ctx->key_count++;
+				const char *string_end = strchr(key + 2, '\"');
 
-				key += 2;
-
-				while (*key && *key != '\"') key++;
-
-				if (!*key++) {
+				if (!string_end) {
 					JOSH_ERROR(ctx, JOSH_ERROR_EXPECTED_KEY_CLOSING_QUOTE);
 
 					return false;
 				}
 
-				if (*key++ != ']') {
+				const size_t len = (size_t)(string_end - key - 2);
+
+				if (key[len + 3] != ']') {
 					JOSH_ERROR(ctx, JOSH_ERROR_EXPECTED_KEY_CLOSING_BRACKET);
 
 					return false;
 				}
+
+				char *new_key = josh_malloc(ctx, len + 1);
+				strncpy(new_key, key + 2, len);
+				new_key[len] = '\0';
+
+				ctx->keys[ctx->key_count].key.str = new_key;
+				ctx->keys[ctx->key_count].type = JOSH_KEY_TYPE_OBJECT;
+				ctx->key_count++;
+
+				key += len + 4;
 			}
 			else {
 				JOSH_ERROR(ctx, JOSH_ERROR_EXPECTED_KEY_VALUE);
@@ -389,7 +400,13 @@ bool josh_parse_key(struct josh_ctx_t *ctx, const char *key) {
 				return false;
 			}
 
-			ctx->keys[ctx->key_count].key.str = start;
+			const size_t len = (size_t)(key - start);
+
+			char *new_key = josh_malloc(ctx, len + 1);
+			strncpy(new_key, start, len);
+			new_key[len] = '\0';
+
+			ctx->keys[ctx->key_count].key.str = new_key;
 			ctx->keys[ctx->key_count].type = JOSH_KEY_TYPE_OBJECT;
 			ctx->key_count++;
 		}
@@ -574,4 +591,18 @@ static inline char josh_step_char(struct josh_ctx_t *ctx) {
 	ctx->column++;
 	if (ctx->found_key) ctx->len++;
 	return *(++ctx->ptr);
+}
+
+void *josh_malloc(struct josh_ctx_t *ctx, size_t bytes) {
+	void *memory = ctx->memory + ctx->allocated;
+
+	ctx->allocated += bytes;
+
+	if (ctx->allocated > JOSH_CONFIG_MAX_MEMORY) {
+		JOSH_ERROR(ctx, JOSH_ERROR_OUT_OF_MEMORY);
+
+		return NULL;
+	}
+
+	return memory;
 }
