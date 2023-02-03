@@ -73,6 +73,7 @@ struct josh_ctx_t {
 
 	unsigned current_index;
 	unsigned current_level;
+	unsigned match_count;
 	bool found_key;
 	const char *value_pos;
 
@@ -192,12 +193,16 @@ bool josh_iter_array(struct josh_ctx_t *ctx) {
 		}
 
 		if (
-			(ctx->current_level == ctx->key_count - 1) &&
+			ctx->current_level < ctx->key_count &&
 			ctx->keys[ctx->current_level].type == JOSH_KEY_TYPE_ARRAY &&
 			ctx->keys[ctx->current_level].key.num == ctx->current_index
 		) {
-			ctx->found_key = true;
-			ctx->value_pos = ctx->ptr;
+			ctx->match_count++;
+
+			if (ctx->match_count == ctx->key_count) {
+				ctx->found_key = true;
+				ctx->value_pos = ctx->ptr;
+			}
 		}
 
 		if (!josh_iter_value(ctx)) return false;
@@ -267,8 +272,10 @@ bool josh_iter_object(struct josh_ctx_t *ctx) {
 		josh_step_char(ctx);
 		josh_iter_whitespace(ctx);
 
+		const unsigned old_match_count = ctx->match_count;
+
 		if (
-			(ctx->current_level == ctx->key_count - 1) &&
+			ctx->current_level < ctx->key_count &&
 			ctx->keys[ctx->current_level].type == JOSH_KEY_TYPE_OBJECT &&
 			strncmp(
 				ctx->keys[ctx->current_level].key.str,
@@ -277,11 +284,17 @@ bool josh_iter_object(struct josh_ctx_t *ctx) {
 				strlen(ctx->keys[ctx->current_level].key.str)
 			) == 0
 		) {
-			ctx->found_key = true;
-			ctx->value_pos = ctx->ptr;
+			ctx->match_count++;
+
+			if (ctx->match_count == ctx->key_count) {
+				ctx->found_key = true;
+				ctx->value_pos = ctx->ptr;
+			}
 		}
 
 		if (!josh_iter_value(ctx)) return false;
+
+		ctx->match_count = old_match_count;
 
 		if (ctx->found_key && ctx->current_level < ctx->key_count) break;
 
@@ -295,7 +308,7 @@ bool josh_iter_object(struct josh_ctx_t *ctx) {
 }
 
 static inline bool josh_is_key_terminator(char c) {
-	return c == ']' || c == '.';
+	return c == '[' || c == '.';
 }
 
 bool josh_parse_key(struct josh_ctx_t *ctx, const char *key) {
@@ -315,25 +328,23 @@ bool josh_parse_key(struct josh_ctx_t *ctx, const char *key) {
 				key++;
 
 				for (;;) {
-					const char num = *key++;
+					const char c = *key++;
 
-					if (josh_is_key_terminator(num)) {
-						break;
-					}
+					if (c == ']') break;
 
-					if (!num) {
+					if (!c) {
 						JOSH_ERROR(ctx, JOSH_ERROR_EXPECTED_KEY_CLOSING_BRACKET);
 
 						return false;
 					}
 
-					if (num < '0' || num > '9') {
+					if (c < '0' || c > '9') {
 						JOSH_ERROR(ctx, JOSH_ERROR_KEY_NUMBER_INVALID);
 
 						return false;
 					}
 
-					index = (index * 10) + ((unsigned)num - '0');
+					index = (index * 10) + ((unsigned)c - '0');
 				}
 
 				ctx->keys[ctx->key_count].key.num = index;

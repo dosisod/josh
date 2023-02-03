@@ -564,4 +564,24 @@ int main(void) {
 
 		ASSERT(!out);
 	}
+
+	TEST("all levels of key must match") {
+		const char *json = "[[1]]";
+		const char *out = josh_extract(&ctx, json, "[999][0]");
+
+		ASSERT(!out);
+
+		json = "{\"a\": {\"b\": 1}}";
+		out = josh_extract(&ctx, json, ".x.b");
+
+		ASSERT(!out);
+	}
+
+	TEST("duplicate object keys doesnt match incorrect element") {
+		const char *json = "{\"a\": null, \"a\": [1]}";
+		const char *out = josh_extract(&ctx, json, ".a[0]");
+
+		ASSERT(out == json + 18);
+		ASSERT(ctx.len == 1);
+	}
 }
