@@ -499,7 +499,7 @@ bool josh_iter_number(struct josh_ctx_t *ctx) {
 	char c = *ctx->ptr;
 	const char *started_at = ctx->ptr;
 
-	if (c == '0' && ctx->ptr[1] != '.') {
+	if (c == '0' && isdigit(ctx->ptr[1])) {
 		JOSH_ERROR(ctx, JOSH_ERROR_NO_LEADING_ZERO);
 
 		return false;

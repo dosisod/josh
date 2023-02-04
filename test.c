@@ -584,4 +584,12 @@ int main(void) {
 		ASSERT(out == json + 18);
 		ASSERT(ctx.len == 1);
 	}
+
+	TEST("zero is a valid number") {
+		const char *json = "[0]";
+		const char *out = josh_extract(&ctx, json, "[0]");
+
+		ASSERT(out == json + 1);
+		ASSERT(ctx.len == 1);
+	}
 }
