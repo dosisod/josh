@@ -17,11 +17,10 @@ int main(void) {
     const char *json = "{\"hello\": [\"world\"]}";
     
     // get a pointer to the first element in the "hello" key
-    size_t len = 0;
-    const char *pos = josh_extract(json, ".hello[0]", &len);
+    const char *pos = josh_extract(json, ".hello[0]");
     
     // print the portion of the JSON containing the key from above
-    printf("got: %.*s\n", len, pos);
+    printf("got: %.*s\n", ctx.len, pos);
 }
 ```
 
@@ -31,6 +30,6 @@ Compiling and running gives us the following output:
 got: "world"
 ```
 
-`josh` uses a syntax similar to [`jq`](https://github.com/stedolan/jq) for extracting
-values. In the above example we essentially get a string view to the portion of our
-JSON which contains the key we asked for, all without any calls to `malloc()`.
+`josh` uses a syntax similar to JavaScript for extracting values.
+In the above example we essentially get a string view to the portion of our
+JSON data which contains the key we asked for, all without any calls to `malloc()`.
