@@ -82,7 +82,7 @@ struct josh_ctx_t {
 };
 
 static inline bool josh_is_value_terminator(char c) {
-	return c == ',' || c == ']' || c == '}';
+	return c == ',' || c == ']' || c == '}' || c == '\0';
 }
 
 bool josh_parse_key(struct josh_ctx_t *ctx, const char *key);
@@ -108,6 +108,11 @@ const char *josh_extract(struct josh_ctx_t *ctx, const char *json, const char *k
 
 	if (!josh_parse_key(ctx, key)) return NULL;
 
+	if (!ctx->key_count) {
+		ctx->found_key = true;
+		ctx->value_pos = json;
+	}
+
 	if (!*ctx->ptr) {
 		JOSH_ERROR(ctx, JOSH_ERROR_EMPTY_VALUE);
 
@@ -116,11 +121,14 @@ const char *josh_extract(struct josh_ctx_t *ctx, const char *json, const char *k
 
 	josh_iter_whitespace(ctx);
 
-	if (*ctx->ptr == '{') {
+	if (!ctx->key_count) {
+		if (josh_iter_value(ctx)) return ctx->value_pos;
+	}
+	else if (ctx->keys[0].type == JOSH_KEY_TYPE_OBJECT) {
 		if (josh_iter_object(ctx)) return ctx->value_pos;
 	}
-	else if (josh_iter_array(ctx)) {
-		return ctx->value_pos;
+	else if (ctx->keys[0].type == JOSH_KEY_TYPE_ARRAY) {
+		if (josh_iter_array(ctx)) return ctx->value_pos;
 	}
 
 	return NULL;
@@ -227,10 +235,9 @@ bool josh_iter_object(struct josh_ctx_t *ctx) {
 
 	if (
 		!ctx->found_key &&
-		ctx->keys[0].type == JOSH_KEY_TYPE_OBJECT &&
+		ctx->keys[ctx->current_level].type == JOSH_KEY_TYPE_OBJECT &&
 		*ctx->ptr != '{'
 	) {
-		// TODO: test this
 		JOSH_ERROR(ctx, JOSH_ERROR_EXPECTED_OBJECT);
 
 		return false;

@@ -592,4 +592,32 @@ int main(void) {
 		ASSERT(out == json + 1);
 		ASSERT(ctx.len == 1);
 	}
+
+	TEST("empty key returns all values") {
+		const char *json = "[1, 2, 3]";
+		const char *out = josh_extract(&ctx, json, "");
+
+		ASSERT(out == json);
+		ASSERT(ctx.len == 9);
+	}
+
+	TEST("empty key can return top level literals") {
+		const char *json = "123";
+		const char *out = josh_extract(&ctx, json, "");
+
+		ASSERT(out == json);
+		ASSERT(ctx.len == 3);
+	}
+
+	TEST("set error when array is specified by key, but array is found") {
+		const char *json = "[]";
+		const char *out = josh_extract(&ctx, json, ".x");
+
+		ASSERT(!out);
+		ASSERT(!ctx.len);
+		ASSERT(ctx.error_id == JOSH_ERROR_EXPECTED_OBJECT);
+		ASSERT(ctx.line == 1);
+		ASSERT(ctx.column == 1);
+		ASSERT(ctx.offset == 0);
+	}
 }
