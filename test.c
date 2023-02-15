@@ -620,4 +620,16 @@ int main(void) {
 		ASSERT(ctx.column == 1);
 		ASSERT(ctx.offset == 0);
 	}
+
+	TEST("set error for trailing characters after top level literal") {
+		const char *json = "123,";
+		const char *out = josh_extract(&ctx, json, "");
+
+		ASSERT(!out);
+		ASSERT(!ctx.len);
+		ASSERT(ctx.error_id == JOSH_ERROR_UNEXPECTED_CHAR);
+		ASSERT(ctx.line == 1);
+		ASSERT(ctx.column == 4);
+		ASSERT(ctx.offset == 3);
+	}
 }

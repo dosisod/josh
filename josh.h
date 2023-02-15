@@ -44,6 +44,7 @@ enum josh_error {
 	JOSH_ERROR_NO_LEADING_ZERO,
 	JOSH_ERROR_KEY_MAX_DEPTH_REACHED,
 	JOSH_ERROR_OUT_OF_MEMORY,
+	JOSH_ERROR_UNEXPECTED_CHAR,
 };
 
 enum josh_key_type_t {
@@ -122,7 +123,15 @@ const char *josh_extract(struct josh_ctx_t *ctx, const char *json, const char *k
 	josh_iter_whitespace(ctx);
 
 	if (!ctx->key_count) {
-		if (josh_iter_value(ctx)) return ctx->value_pos;
+		if (josh_iter_value(ctx)) {
+			josh_iter_whitespace(ctx);
+
+			if (!*ctx->ptr) return ctx->value_pos;
+
+			JOSH_ERROR(ctx, JOSH_ERROR_UNEXPECTED_CHAR);
+
+			return NULL;
+		}
 	}
 	else if (ctx->keys[0].type == JOSH_KEY_TYPE_OBJECT) {
 		if (josh_iter_object(ctx)) return ctx->value_pos;
