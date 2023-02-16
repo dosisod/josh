@@ -632,4 +632,16 @@ int main(void) {
 		ASSERT(ctx.column == 4);
 		ASSERT(ctx.offset == 3);
 	}
+
+	TEST("error offset is properly advanced after literals") {
+		const char *json = "[true, x]";
+		const char *out = josh_extract(&ctx, json, "");
+
+		ASSERT(!out);
+		ASSERT(!ctx.len);
+		ASSERT(ctx.error_id == JOSH_ERROR_EXPECTED_LITERAL);
+		ASSERT(ctx.line == 1);
+		ASSERT(ctx.column == 8);
+		ASSERT(ctx.offset == 7);
+	}
 }

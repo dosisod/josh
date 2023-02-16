@@ -95,6 +95,7 @@ bool josh_iter_number(struct josh_ctx_t *ctx);
 bool josh_iter_literal(struct josh_ctx_t *ctx);
 static inline void josh_iter_whitespace(struct josh_ctx_t *ctx);
 static inline char josh_step_char(struct josh_ctx_t *ctx);
+static inline char josh_step_n_chars(struct josh_ctx_t *ctx, unsigned n);
 void *josh_malloc(struct josh_ctx_t *ctx, size_t bytes);
 
 #define JOSH_ERROR(ctx, id) \
@@ -565,8 +566,7 @@ bool josh_iter_literal(struct josh_ctx_t *ctx) {
 			return false;
 		}
 
-		ctx->ptr += 4;
-		if (ctx->found_key) ctx->len += 4;
+		josh_step_n_chars(ctx, 4);
 	}
 	else if (c == 'f') {
 		if (strcmp(ctx->ptr, "false") < 0) {
@@ -575,8 +575,7 @@ bool josh_iter_literal(struct josh_ctx_t *ctx) {
 			return false;
 		}
 
-		ctx->ptr += 5;
-		if (ctx->found_key) ctx->len += 5;
+		josh_step_n_chars(ctx, 5);
 	}
 	else if (c == 'n') {
 		if (strcmp(ctx->ptr, "null") < 0) {
@@ -585,8 +584,7 @@ bool josh_iter_literal(struct josh_ctx_t *ctx) {
 			return false;
 		}
 
-		ctx->ptr += 4;
-		if (ctx->found_key) ctx->len += 4;
+		josh_step_n_chars(ctx, 4);
 	}
 	else {
 		JOSH_ERROR(ctx, JOSH_ERROR_EXPECTED_LITERAL);
@@ -613,11 +611,17 @@ static inline void josh_iter_whitespace(struct josh_ctx_t *ctx) {
 }
 
 static inline char josh_step_char(struct josh_ctx_t *ctx) {
-	// Advance the context by a single character, returning the new character.
+	return josh_step_n_chars(ctx, 1);
+}
 
-	ctx->column++;
-	if (ctx->found_key) ctx->len++;
-	return *(++ctx->ptr);
+static inline char josh_step_n_chars(struct josh_ctx_t *ctx, unsigned n) {
+	// Advance the context by n characters, returning the last character.
+
+	ctx->ptr += n;
+	ctx->column += n;
+	if (ctx->found_key) ctx->len += n;
+
+	return *ctx->ptr;
 }
 
 void *josh_malloc(struct josh_ctx_t *ctx, size_t bytes) {
