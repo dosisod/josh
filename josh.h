@@ -54,10 +54,8 @@ enum josh_key_type_t {
 
 struct josh_key_t {
 	enum josh_key_type_t type;
-	union {
-		unsigned num;
-		const char *str;
-	} key;
+	unsigned num;
+	const char *str;
 };
 
 struct josh_ctx_t {
@@ -213,7 +211,7 @@ bool josh_iter_array(struct josh_ctx_t *ctx) {
 		if (
 			ctx->current_level < ctx->key_count &&
 			ctx->keys[ctx->current_level].type == JOSH_KEY_TYPE_ARRAY &&
-			ctx->keys[ctx->current_level].key.num == ctx->current_index
+			ctx->keys[ctx->current_level].num == ctx->current_index
 		) {
 			ctx->match_count++;
 
@@ -295,10 +293,9 @@ bool josh_iter_object(struct josh_ctx_t *ctx) {
 			ctx->current_level < ctx->key_count &&
 			ctx->keys[ctx->current_level].type == JOSH_KEY_TYPE_OBJECT &&
 			strncmp(
-				ctx->keys[ctx->current_level].key.str,
+				ctx->keys[ctx->current_level].str,
 				key,
-				// TODO: dont recalculate key length for same level
-				strlen(ctx->keys[ctx->current_level].key.str)
+				ctx->keys[ctx->current_level].num
 			) == 0
 		) {
 			ctx->match_count++;
@@ -364,7 +361,7 @@ bool josh_parse_key(struct josh_ctx_t *ctx, const char *key) {
 					index = (index * 10) + ((unsigned)c - '0');
 				}
 
-				ctx->keys[ctx->key_count].key.num = index;
+				ctx->keys[ctx->key_count].num = index;
 				ctx->keys[ctx->key_count].type = JOSH_KEY_TYPE_ARRAY;
 				ctx->key_count++;
 			}
@@ -377,7 +374,7 @@ bool josh_parse_key(struct josh_ctx_t *ctx, const char *key) {
 					return false;
 				}
 
-				const size_t len = (size_t)(string_end - key - 2);
+				const unsigned len = (unsigned)(string_end - key - 2);
 
 				if (key[len + 3] != ']') {
 					JOSH_ERROR(ctx, JOSH_ERROR_EXPECTED_KEY_CLOSING_BRACKET);
@@ -389,7 +386,8 @@ bool josh_parse_key(struct josh_ctx_t *ctx, const char *key) {
 				strncpy(new_key, key + 2, len);
 				new_key[len] = '\0';
 
-				ctx->keys[ctx->key_count].key.str = new_key;
+				ctx->keys[ctx->key_count].str = new_key;
+				ctx->keys[ctx->key_count].num = len;
 				ctx->keys[ctx->key_count].type = JOSH_KEY_TYPE_OBJECT;
 				ctx->key_count++;
 
@@ -428,13 +426,14 @@ bool josh_parse_key(struct josh_ctx_t *ctx, const char *key) {
 				return false;
 			}
 
-			const size_t len = (size_t)(key - start);
+			const unsigned len = (unsigned)(key - start);
 
 			char *new_key = josh_malloc(ctx, len + 1);
 			strncpy(new_key, start, len);
 			new_key[len] = '\0';
 
-			ctx->keys[ctx->key_count].key.str = new_key;
+			ctx->keys[ctx->key_count].str = new_key;
+			ctx->keys[ctx->key_count].num = len;
 			ctx->keys[ctx->key_count].type = JOSH_KEY_TYPE_OBJECT;
 			ctx->key_count++;
 		}

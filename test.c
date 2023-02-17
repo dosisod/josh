@@ -233,7 +233,7 @@ int main(void) {
 		ASSERT(!ctx.error_id);
 		ASSERT(ctx.key_count == 1);
 		ASSERT(ctx.keys[0].type == JOSH_KEY_TYPE_ARRAY);
-		ASSERT(ctx.keys[0].key.num == 2);
+		ASSERT(ctx.keys[0].num == 2);
 		ASSERT(ctx.len == 1);
 		ASSERT(out == json + 7);
 	}
@@ -304,8 +304,8 @@ int main(void) {
 		ASSERT(!ctx.error_id);
 		ASSERT(ctx.key_count == 1);
 		ASSERT(ctx.keys[0].type == JOSH_KEY_TYPE_OBJECT);
-		ASSERT(ctx.keys[0].key.str);
-		ASSERT(strcmp(ctx.keys[0].key.str, "abc") == 0);
+		ASSERT(ctx.keys[0].str);
+		ASSERT(strcmp(ctx.keys[0].str, "abc") == 0);
 	}
 
 	TEST("parse empty object") {
@@ -446,9 +446,9 @@ int main(void) {
 		ASSERT(!ctx.error_id);
 		ASSERT(ctx.key_count == 2);
 		ASSERT(ctx.keys[0].type == JOSH_KEY_TYPE_ARRAY);
-		ASSERT(ctx.keys[0].key.num == 1);
+		ASSERT(ctx.keys[0].num == 1);
 		ASSERT(ctx.keys[1].type == JOSH_KEY_TYPE_ARRAY);
-		ASSERT(ctx.keys[1].key.num == 2);
+		ASSERT(ctx.keys[1].num == 2);
 	}
 
 	TEST("set error for key missing value") {
@@ -513,12 +513,12 @@ int main(void) {
 		ASSERT(!ctx.error_id);
 		ASSERT(ctx.key_count == 2);
 		ASSERT(ctx.keys[0].type == JOSH_KEY_TYPE_OBJECT);
-		ASSERT(ctx.keys[0].key.str);
+		ASSERT(ctx.keys[0].str);
 		// TODO: use strcmp once strings are copied to context
-		ASSERT(strncmp(ctx.keys[0].key.str, "a", 1) == 0);
+		ASSERT(strncmp(ctx.keys[0].str, "a", 1) == 0);
 		ASSERT(ctx.keys[1].type == JOSH_KEY_TYPE_OBJECT);
-		ASSERT(ctx.keys[1].key.str);
-		ASSERT(strncmp(ctx.keys[1].key.str, "b", 1) == 0);
+		ASSERT(ctx.keys[1].str);
+		ASSERT(strncmp(ctx.keys[1].str, "b", 1) == 0);
 	}
 
 	TEST("set error if key max depth is reached") {
