@@ -644,4 +644,28 @@ int main(void) {
 		ASSERT(ctx.column == 8);
 		ASSERT(ctx.offset == 7);
 	}
+
+	TEST("set error for trailing comma in array") {
+		const char *json = "[1,]";
+		const char *out = josh_extract(&ctx, json, "");
+
+		ASSERT(!out);
+		ASSERT(!ctx.len);
+		ASSERT(ctx.error_id == JOSH_ERROR_NO_TRAILING_COMMA);
+		ASSERT(ctx.line == 1);
+		ASSERT(ctx.column == 4);
+		ASSERT(ctx.offset == 3);
+	}
+
+	TEST("set error for trailing comma in object") {
+		const char *json = "{\"a\": 1,}";
+		const char *out = josh_extract(&ctx, json, "");
+
+		ASSERT(!out);
+		ASSERT(!ctx.len);
+		ASSERT(ctx.error_id == JOSH_ERROR_NO_TRAILING_COMMA);
+		ASSERT(ctx.line == 1);
+		ASSERT(ctx.column == 9);
+		ASSERT(ctx.offset == 8);
+	}
 }

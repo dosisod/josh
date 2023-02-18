@@ -19,6 +19,12 @@
 #define JOSH_CONFIG_MAX_MEMORY (1024 * 1024 * 8) // 8MB
 #endif
 
+// Allow for trailing comma support. This is not allowed by the spec, but is
+// a common extension, and can be disabed easily in the parser if desired.
+#ifndef JOSH_CONFIG_ALLOW_TRAILING_COMMA
+#define JOSH_CONFIG_ALLOW_TRAILING_COMMA 0
+#endif
+
 enum josh_error {
 	JOSH_ERROR_NONE,
 	JOSH_ERROR_EXPECTED_ARRAY,
@@ -45,6 +51,7 @@ enum josh_error {
 	JOSH_ERROR_KEY_MAX_DEPTH_REACHED,
 	JOSH_ERROR_OUT_OF_MEMORY,
 	JOSH_ERROR_UNEXPECTED_CHAR,
+	JOSH_ERROR_NO_TRAILING_COMMA,
 };
 
 enum josh_key_type_t {
@@ -91,7 +98,7 @@ bool josh_iter_object(struct josh_ctx_t *ctx);
 bool josh_iter_string(struct josh_ctx_t *ctx);
 bool josh_iter_number(struct josh_ctx_t *ctx);
 bool josh_iter_literal(struct josh_ctx_t *ctx);
-static inline void josh_iter_whitespace(struct josh_ctx_t *ctx);
+static inline char josh_iter_whitespace(struct josh_ctx_t *ctx);
 static inline char josh_step_char(struct josh_ctx_t *ctx);
 static inline char josh_step_n_chars(struct josh_ctx_t *ctx, unsigned n);
 void *josh_malloc(struct josh_ctx_t *ctx, size_t bytes);
@@ -123,9 +130,7 @@ const char *josh_extract(struct josh_ctx_t *ctx, const char *json, const char *k
 
 	if (!ctx->key_count) {
 		if (josh_iter_value(ctx)) {
-			josh_iter_whitespace(ctx);
-
-			if (!*ctx->ptr) return ctx->value_pos;
+			if (!josh_iter_whitespace(ctx)) return ctx->value_pos;
 
 			JOSH_ERROR(ctx, JOSH_ERROR_UNEXPECTED_CHAR);
 
@@ -202,7 +207,6 @@ bool josh_iter_array(struct josh_ctx_t *ctx) {
 				return true;
 			}
 
-			// TODO: throw error if "]" comes after ","
 			JOSH_ERROR(ctx, JOSH_ERROR_ARRAY_INDEX_NOT_FOUND);
 
 			return false;
@@ -230,7 +234,15 @@ bool josh_iter_array(struct josh_ctx_t *ctx) {
 		if (*ctx->ptr == ',') {
 			ctx->current_index++;
 			josh_step_char(ctx);
-			josh_iter_whitespace(ctx);
+			const char c = josh_iter_whitespace(ctx);
+
+#if JOSH_CONFIG_ALLOW_TRAILING_COMMA == 0
+			if (c == ']') {
+				JOSH_ERROR(ctx, JOSH_ERROR_NO_TRAILING_COMMA);
+
+				return false;
+			}
+#endif
 		}
 	}
 
@@ -262,7 +274,6 @@ bool josh_iter_object(struct josh_ctx_t *ctx) {
 				return true;
 			}
 
-			// TODO: throw error if "}" comes after ","
 			JOSH_ERROR(ctx, JOSH_ERROR_OBJECT_KEY_NOT_FOUND);
 
 			return false;
@@ -314,7 +325,15 @@ bool josh_iter_object(struct josh_ctx_t *ctx) {
 
 		if (*ctx->ptr == ',') {
 			josh_step_char(ctx);
-			josh_iter_whitespace(ctx);
+			const char c = josh_iter_whitespace(ctx);
+
+#if JOSH_CONFIG_ALLOW_TRAILING_COMMA == 0
+			if (c == '}') {
+				JOSH_ERROR(ctx, JOSH_ERROR_NO_TRAILING_COMMA);
+
+				return false;
+			}
+#endif
 		}
 	}
 
@@ -594,7 +613,7 @@ bool josh_iter_literal(struct josh_ctx_t *ctx) {
 	return true;
 }
 
-static inline void josh_iter_whitespace(struct josh_ctx_t *ctx) {
+static inline char josh_iter_whitespace(struct josh_ctx_t *ctx) {
 	// Iterate context to next non whitespace character.
 
 	char c = *ctx->ptr;
@@ -607,6 +626,8 @@ static inline void josh_iter_whitespace(struct josh_ctx_t *ctx) {
 
 		c = josh_step_char(ctx);
 	}
+
+	return c;
 }
 
 static inline char josh_step_char(struct josh_ctx_t *ctx) {
