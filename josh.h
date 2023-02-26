@@ -91,6 +91,7 @@ static inline bool josh_is_value_terminator(char c) {
 	return c == ',' || c == ']' || c == '}' || c == '\0';
 }
 
+void josh_reset(struct josh_ctx_t *ctx);
 bool josh_parse_key(struct josh_ctx_t *ctx, const char *key);
 bool josh_iter_value(struct josh_ctx_t *ctx);
 bool josh_iter_array(struct josh_ctx_t *ctx);
@@ -108,10 +109,15 @@ void *josh_malloc(struct josh_ctx_t *ctx, size_t bytes);
 	(ctx)->offset = (unsigned)((ctx)->ptr - (ctx)->start); \
 	(ctx)->len = 0;
 
-const char *josh_extract(struct josh_ctx_t *ctx, const char *json, const char *key) {
+void josh_reset(struct josh_ctx_t *ctx) {
 	memset(ctx, 0, sizeof(*ctx));
-	ctx->ptr = ctx->start = json;
 	ctx->line = ctx->column = 1;
+}
+
+const char *josh_extract(struct josh_ctx_t *ctx, const char *json, const char *key) {
+	josh_reset(ctx);
+
+	ctx->ptr = ctx->start = json;
 
 	if (!josh_parse_key(ctx, key)) return NULL;
 

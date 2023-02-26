@@ -297,7 +297,8 @@ int main(void) {
 	}
 
 	TEST("parse object key") {
-		memset(&ctx, 0, sizeof ctx);
+		josh_reset(&ctx);
+
 		const bool ok = josh_parse_key(&ctx, ".abc");
 
 		ASSERT(ok);
@@ -438,7 +439,7 @@ int main(void) {
 	}
 
 	TEST("parse nested key") {
-		memset(&ctx, 0, sizeof ctx);
+		josh_reset(&ctx);
 
 		const bool ok = josh_parse_key(&ctx, "[1][2]");
 
@@ -452,7 +453,7 @@ int main(void) {
 	}
 
 	TEST("set error for key missing value") {
-		memset(&ctx, 0, sizeof ctx);
+		josh_reset(&ctx);
 
 		const bool ok = josh_parse_key(&ctx, "[");
 
@@ -461,7 +462,7 @@ int main(void) {
 	}
 
 	TEST("set error for number key missing closing square bracket") {
-		memset(&ctx, 0, sizeof ctx);
+		josh_reset(&ctx);
 
 		const bool ok = josh_parse_key(&ctx, "[1");
 
@@ -470,7 +471,7 @@ int main(void) {
 	}
 
 	TEST("set error for string key missing closing square bracket") {
-		memset(&ctx, 0, sizeof ctx);
+		josh_reset(&ctx);
 
 		const bool ok = josh_parse_key(&ctx, "[\"abc\"");
 
@@ -479,7 +480,7 @@ int main(void) {
 	}
 
 	TEST("set error for string key missing closing quote") {
-		memset(&ctx, 0, sizeof ctx);
+		josh_reset(&ctx);
 
 		const bool ok = josh_parse_key(&ctx, "[\"abc");
 
@@ -506,7 +507,8 @@ int main(void) {
 	}
 
 	TEST("parse key with nested dot notation") {
-		memset(&ctx, 0, sizeof ctx);
+		josh_reset(&ctx);
+
 		const bool ok = josh_parse_key(&ctx, ".a.b");
 
 		ASSERT(ok);
@@ -522,7 +524,8 @@ int main(void) {
 	}
 
 	TEST("set error if key max depth is reached") {
-		memset(&ctx, 0, sizeof ctx);
+		josh_reset(&ctx);
+
 		const bool ok = josh_parse_key(&ctx, "[1][2][3][4][5][6][7][8][9][10][11][12][13][14][15][16][17]");
 
 		ASSERT(!ok);
@@ -530,7 +533,7 @@ int main(void) {
 	}
 
 	TEST("allocate memory increments counter") {
-		memset(&ctx, 0, sizeof ctx);
+		josh_reset(&ctx);
 
 		void *memory = josh_malloc(&ctx, 1);
 
@@ -545,7 +548,7 @@ int main(void) {
 	}
 
 	TEST("set error if allocating more them max memory") {
-		memset(&ctx, 0, sizeof ctx);
+		josh_reset(&ctx);
 
 		void *mem = josh_malloc(&ctx, JOSH_CONFIG_MAX_MEMORY + 1);
 
