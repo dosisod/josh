@@ -16,7 +16,7 @@
 // for doing extractions. Depending on how big your JSON data is, you might
 // need to increase this value. Size is specified in bytes.
 #ifndef JOSH_CONFIG_MAX_MEMORY
-#define JOSH_CONFIG_MAX_MEMORY (1024 * 1024 * 8) // 8MB
+#define JOSH_CONFIG_MAX_MEMORY (unsigned)(1024 * 1024 * 8) // 8MB
 #endif
 
 // Allow for trailing comma support. This is not allowed by the spec, but is
@@ -432,7 +432,7 @@ bool josh_parse_key(struct josh_ctx_t *ctx, const char *key) {
 			}
 
 			const char *start = key + 1;
-			char c = *(++key);
+			char c = 0;
 
 			while ((c = *(++key))) {
 				if (
@@ -496,7 +496,8 @@ bool josh_iter_string(struct josh_ctx_t *ctx) {
 
 				continue;
 			}
-			else if (c == 'u') {
+
+			if (c == 'u') {
 				for (unsigned i = 0; i < 4; i++) {
 					c = josh_step_char(ctx);
 
@@ -509,13 +510,13 @@ bool josh_iter_string(struct josh_ctx_t *ctx) {
 
 				continue;
 			}
-			else {
-				JOSH_ERROR(ctx, JOSH_ERROR_INVALID_ESCAPE_CODE);
 
-				return false;
-			}
+			JOSH_ERROR(ctx, JOSH_ERROR_INVALID_ESCAPE_CODE);
+
+			return false;
 		}
-		else if (c == '\"') {
+
+		if (c == '\"') {
 			josh_step_char(ctx);
 			break;
 		}
