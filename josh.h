@@ -1,6 +1,8 @@
 #include <ctype.h>
+#include <float.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
 // Defines how many layers deep the key parser can parse. This does not define
@@ -81,10 +83,29 @@ struct josh_ctx_t {
 	unsigned current_level;
 	unsigned match_count;
 	bool found_key;
+	bool create_node;
 	const char *value_pos;
 
 	size_t allocated;
 	uint8_t memory[JOSH_CONFIG_MAX_MEMORY];
+};
+
+enum josh_node_type_t {
+	JOSH_NODE_TYPE_NULL,
+	JOSH_NODE_TYPE_TRUE,
+	JOSH_NODE_TYPE_FALSE,
+	JOSH_NODE_TYPE_INT,
+	JOSH_NODE_TYPE_FLOAT,
+	JOSH_NODE_TYPE_ARRAY,
+	JOSH_NODE_TYPE_OBJECT,
+};
+
+struct josh_node_t {
+	enum josh_node_type_t type;
+	union {
+		long double _float;
+		long long int _int;
+	} value;
 };
 
 static inline bool josh_is_value_terminator(char c) {
@@ -113,6 +134,47 @@ void josh_reset(struct josh_ctx_t *ctx) {
 	memset(ctx, 0, sizeof(*ctx));
 	ctx->line = ctx->column = 1;
 }
+
+struct josh_node_t *josh_parse(struct josh_ctx_t *ctx, const char *json) {
+	josh_reset(ctx);
+
+	ctx->ptr = ctx->start = json;
+	ctx->create_node = true;
+
+	if (!*ctx->ptr) {
+		JOSH_ERROR(ctx, JOSH_ERROR_EMPTY_VALUE);
+
+		return NULL;
+	}
+
+	josh_iter_whitespace(ctx);
+
+	struct josh_node_t *root = (void *)ctx->memory;
+
+	if (josh_iter_value(ctx)) {
+		if (!josh_iter_whitespace(ctx)) return root;
+
+		JOSH_ERROR(ctx, JOSH_ERROR_UNEXPECTED_CHAR);
+
+		return NULL;
+	}
+
+	return NULL;
+}
+
+#define josh_is_null(node) ((node)->type == JOSH_NODE_TYPE_NULL)
+#define josh_is_true(node) ((node)->type == JOSH_NODE_TYPE_TRUE)
+#define josh_is_false(node) ((node)->type == JOSH_NODE_TYPE_FALSE)
+#define josh_is_bool(node) ((node)->type == JOSH_NODE_TYPE_TRUE || (node)->type == JOSH_NODE_TYPE_FALSE)
+#define josh_is_int(node) ((node)->type == JOSH_NODE_TYPE_INT)
+#define josh_is_float(node) ((node)->type == JOSH_NODE_TYPE_FLOAT)
+#define josh_is_numeric(node) ((node)->type == JOSH_NODE_TYPE_INT || (node)->type == JOSH_NODE_TYPE_FLOAT)
+#define josh_int_value(node) ((node)->value._int)
+#define josh_float_value(node) ((node)->value._float)
+#define josh_is_array(node) ((node)->type == JOSH_NODE_TYPE_ARRAY)
+#define josh_is_array_empty(node) (true)
+#define josh_is_object(node) ((node)->type == JOSH_NODE_TYPE_OBJECT)
+#define josh_is_object_empty(node) (true)
 
 const char *josh_extract(struct josh_ctx_t *ctx, const char *json, const char *key) {
 	josh_reset(ctx);
@@ -205,9 +267,14 @@ bool josh_iter_array(struct josh_ctx_t *ctx) {
 	josh_step_char(ctx);
 	josh_iter_whitespace(ctx);
 
+	if (ctx->create_node) {
+		struct josh_node_t *node = josh_malloc(ctx, sizeof(struct josh_node_t));
+		node->type = JOSH_NODE_TYPE_ARRAY;
+	}
+
 	for (;;) {
 		if (*ctx->ptr == ']') {
-			if (ctx->found_key) {
+			if (ctx->found_key || ctx->create_node) {
 				josh_step_char(ctx);
 
 				return true;
@@ -272,9 +339,15 @@ bool josh_iter_object(struct josh_ctx_t *ctx) {
 	josh_step_char(ctx);
 	josh_iter_whitespace(ctx);
 
+	if (ctx->create_node) {
+		struct josh_node_t *node = josh_malloc(ctx, sizeof(struct josh_node_t));
+		node->type = JOSH_NODE_TYPE_OBJECT;
+	}
+
+
 	for (;;) {
 		if (*ctx->ptr == '}') {
-			if (ctx->found_key) {
+			if (ctx->found_key || ctx->create_node) {
 				josh_step_char(ctx);
 
 				return true;
@@ -537,6 +610,8 @@ bool josh_iter_number(struct josh_ctx_t *ctx) {
 	// Iterate the context until the end of the current number. Return true
 	// if the function succeeds.
 
+	const char *start = ctx->ptr;
+
 	if (*ctx->ptr == '-') josh_step_char(ctx);
 	char c = *ctx->ptr;
 	const char *started_at = ctx->ptr;
@@ -550,7 +625,11 @@ bool josh_iter_number(struct josh_ctx_t *ctx) {
 	while (c && isdigit(c)) c = josh_step_char(ctx);
 	if (ctx->ptr == started_at) goto fail;
 
+	bool is_floating_point = false;
+
 	if (c == '.') {
+		is_floating_point = true;
+
 		c = josh_step_char(ctx);
 
 		started_at = ctx->ptr;
@@ -559,6 +638,8 @@ bool josh_iter_number(struct josh_ctx_t *ctx) {
 	}
 
 	if (c == 'e' || c == 'E') {
+		is_floating_point = true;
+
 		c = josh_step_char(ctx);
 
 		if (c == '-' || c == '+') c = josh_step_char(ctx);
@@ -566,6 +647,20 @@ bool josh_iter_number(struct josh_ctx_t *ctx) {
 		started_at = ctx->ptr;
 		while (c && isdigit(c)) c = josh_step_char(ctx);
 		if (ctx->ptr == started_at) goto fail;
+	}
+
+	if (ctx->create_node) {
+		struct josh_node_t *node = josh_malloc(ctx, sizeof(struct josh_node_t));
+
+		// TODO: throw error for huge values (potentially replace with inf/nan)
+		if (is_floating_point) {
+			node->type = JOSH_NODE_TYPE_FLOAT;
+			node->value._float = strtold(start, NULL);
+		}
+		else {
+			node->type = JOSH_NODE_TYPE_INT;
+			node->value._int = strtoll(start, NULL, 10);
+		}
 	}
 
 	if (!josh_is_value_terminator(*ctx->ptr)) goto fail;
@@ -591,6 +686,11 @@ bool josh_iter_literal(struct josh_ctx_t *ctx) {
 			return false;
 		}
 
+		if (ctx->create_node) {
+			struct josh_node_t *node = josh_malloc(ctx, sizeof(struct josh_node_t));
+			node->type = JOSH_NODE_TYPE_TRUE;
+		}
+
 		josh_step_n_chars(ctx, 4);
 	}
 	else if (c == 'f') {
@@ -600,6 +700,11 @@ bool josh_iter_literal(struct josh_ctx_t *ctx) {
 			return false;
 		}
 
+		if (ctx->create_node) {
+			struct josh_node_t *node = josh_malloc(ctx, sizeof(struct josh_node_t));
+			node->type = JOSH_NODE_TYPE_FALSE;
+		}
+
 		josh_step_n_chars(ctx, 5);
 	}
 	else if (c == 'n') {
@@ -607,6 +712,11 @@ bool josh_iter_literal(struct josh_ctx_t *ctx) {
 			JOSH_ERROR(ctx, JOSH_ERROR_EXPECTED_NULL);
 
 			return false;
+		}
+
+		if (ctx->create_node) {
+			struct josh_node_t *node = josh_malloc(ctx, sizeof(struct josh_node_t));
+			node->type = JOSH_NODE_TYPE_NULL;
 		}
 
 		josh_step_n_chars(ctx, 4);

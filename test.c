@@ -671,4 +671,112 @@ int main(void) {
 		ASSERT(ctx.column == 9);
 		ASSERT(ctx.offset == 8);
 	}
+
+	TEST("parse null node") {
+		const char *json = "null";
+
+		struct josh_node_t *root = josh_parse(&ctx, json);
+
+		ASSERT(root);
+		ASSERT(root->type == JOSH_NODE_TYPE_NULL);
+
+		ASSERT(josh_is_null(root));
+	}
+
+	TEST("parse true node") {
+		const char *json = "true";
+
+		struct josh_node_t *root = josh_parse(&ctx, json);
+
+		ASSERT(root);
+		ASSERT(root->type == JOSH_NODE_TYPE_TRUE);
+
+		ASSERT(josh_is_true(root));
+		ASSERT(!josh_is_false(root));
+		ASSERT(josh_is_bool(root));
+	}
+
+	TEST("parse false node") {
+		const char *json = "false";
+
+		struct josh_node_t *root = josh_parse(&ctx, json);
+
+		ASSERT(root);
+		ASSERT(root->type == JOSH_NODE_TYPE_FALSE);
+
+		ASSERT(josh_is_false(root));
+		ASSERT(!josh_is_true(root));
+		ASSERT(josh_is_bool(root));
+	}
+
+	TEST("parse int node") {
+		const char *json = "123";
+
+		struct josh_node_t *root = josh_parse(&ctx, json);
+
+		ASSERT(root);
+		ASSERT(root->type == JOSH_NODE_TYPE_INT);
+
+		ASSERT(josh_is_int(root));
+		ASSERT(!josh_is_float(root));
+		ASSERT(josh_is_numeric(root));
+		ASSERT(josh_int_value(root) == 123);
+	}
+
+	TEST("parse negative int node") {
+		const char *json = "-123";
+
+		struct josh_node_t *root = josh_parse(&ctx, json);
+
+		ASSERT(root);
+		ASSERT(root->type == JOSH_NODE_TYPE_INT);
+
+		ASSERT(josh_is_int(root));
+		ASSERT(!josh_is_float(root));
+		ASSERT(josh_is_numeric(root));
+		ASSERT(josh_int_value(root) == -123);
+	}
+
+	TEST("parse float node") {
+		const char *json = "3.1415";
+
+		struct josh_node_t *root = josh_parse(&ctx, json);
+
+		ASSERT(root);
+		ASSERT(root->type == JOSH_NODE_TYPE_FLOAT);
+
+		ASSERT(josh_is_float(root));
+		ASSERT(!josh_is_int(root));
+		ASSERT(josh_is_numeric(root));
+
+		const long double value = josh_float_value(root);
+		const long double expected = 3.1415L;
+
+		ASSERT((expected - 0.01L) < value);
+		ASSERT(value < (expected + 0.01L));
+	}
+
+	TEST("parse empty array node") {
+		const char *json = "[]";
+
+		struct josh_node_t *root = josh_parse(&ctx, json);
+
+		ASSERT(root);
+		ASSERT(root->type == JOSH_NODE_TYPE_ARRAY);
+
+		ASSERT(josh_is_array(root));
+		ASSERT(josh_is_array_empty(root));
+	}
+
+	TEST("parse empty object node") {
+		const char *json = "{}";
+
+		struct josh_node_t *root = josh_parse(&ctx, json);
+
+		ASSERT(root);
+		ASSERT(root->type == JOSH_NODE_TYPE_OBJECT);
+
+		ASSERT(josh_is_object(root));
+		ASSERT(josh_is_object_empty(root));
+	}
 }
